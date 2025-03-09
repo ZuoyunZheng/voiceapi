@@ -32,9 +32,9 @@ docker build -t voiceapi:cuda_dev -f Dockerfile.cuda.cn .
 ```
 
 ## Streaming API (via WebSocket)
-### /asr 
+### /asr
 Send PCM 16bit audio data to the server, and the server will return the transcription result.
-- `samplerate` can be set in the query string, default is 16000. 
+- `samplerate` can be set in the query string, default is 16000.
 
 The server will return the transcription result in JSON format, with the following fields:
 - `text`: the transcription result
@@ -59,10 +59,10 @@ The server will return the transcription result in JSON format, with the followi
 ```
 ### /tts
 Send text to the server, and the server will return the synthesized audio data.
-- `samplerate` can be set in the query string, default is 16000. 
+- `samplerate` can be set in the query string, default is 16000.
 - `sid` is the Speaker ID, default is 0.
 - `speed` is the speed of the synthesized audio, default is 1.0.
-- `chunk_size` is the size of the audio chunk, default is 1024. 
+- `chunk_size` is the size of the audio chunk, default is 1024.
 
 The server will return the synthesized audio data in binary format.
 - The audio data is in PCM 16bit format, with the binary data in the response body.
@@ -98,14 +98,14 @@ The server will return the synthesized audio data in binary format.
 ```
 
 ### No Streaming API
-#### /tts 
+#### /tts
 Send text to the server, and the server will return the synthesized audio data.
 
 - `text` is the text to be synthesized.
 - `samplerate` can be set in the query string, default is 16000.
 - `sid` is the Speaker ID, default is 0.
 - `speed` is the speed of the synthesized audio, default is 1.0.
-- 
+-
 ```shell
 curl -X POST "http://localhost:8000/tts" \
      -H "Content-Type: application/json" \
@@ -132,7 +132,7 @@ curl -SL -O https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/v
 curl -SL -O https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-melo-tts-zh_en.tar.bz2
 ```
 ### sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20
-```bash 
+```bash
 curl -SL -O https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20.tar.bz2
 ```
 

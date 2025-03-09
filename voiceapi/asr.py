@@ -1,7 +1,6 @@
-from typing import *
+from typing import Union
 import logging
 import time
-import logging
 import sherpa_onnx
 import os
 import asyncio
@@ -22,7 +21,11 @@ class ASRResult:
 
 
 class ASRStream:
-    def __init__(self, recognizer: Union[sherpa_onnx.OnlineRecognizer | sherpa_onnx.OfflineRecognizer], sample_rate: int) -> None:
+    def __init__(
+        self,
+        recognizer: Union[sherpa_onnx.OnlineRecognizer | sherpa_onnx.OfflineRecognizer],
+        sample_rate: int,
+    ) -> None:
         self.recognizer = recognizer
         self.inbuf = asyncio.Queue()
         self.outbuf = asyncio.Queue()
@@ -40,7 +43,7 @@ class ASRStream:
         stream = self.recognizer.create_stream()
         last_result = ""
         segment_id = 0
-        logger.info('asr: start real-time recognizer')
+        logger.info("asr: start real-time recognizer")
         while not self.is_closed:
             samples = await self.inbuf.get()
             stream.accept_waveform(self.sample_rate, samples)
@@ -52,20 +55,18 @@ class ASRStream:
 
             if result and (last_result != result):
                 last_result = result
-                logger.info(f' > {segment_id}:{result}')
-                self.outbuf.put_nowait(
-                    ASRResult(result, False, segment_id))
+                logger.info(f" > {segment_id}:{result}")
+                self.outbuf.put_nowait(ASRResult(result, False, segment_id))
 
             if is_endpoint:
                 if result:
-                    logger.info(f'{segment_id}: {result}')
-                    self.outbuf.put_nowait(
-                        ASRResult(result, True, segment_id))
+                    logger.info(f"{segment_id}: {result}")
+                    self.outbuf.put_nowait(ASRResult(result, True, segment_id))
                     segment_id += 1
                 self.recognizer.reset(stream)
 
     async def run_offline(self):
-        vad = _asr_engines['vad']
+        vad = _asr_engines["vad"]
         segment_id = 0
         st = None
         while not self.is_closed:
@@ -83,7 +84,7 @@ class ASRStream:
                 result = stream.result.text.strip()
                 if result:
                     duration = time.time() - st
-                    logger.info(f'{segment_id}:{result} ({duration:.2f}s)')
+                    logger.info(f"{segment_id}:{result} ({duration:.2f}s)")
                     self.outbuf.put_nowait(ASRResult(result, True, segment_id))
                     segment_id += 1
             st = None
@@ -103,7 +104,8 @@ class ASRStream:
 
 def create_zipformer(samplerate: int, args) -> sherpa_onnx.OnlineRecognizer:
     d = os.path.join(
-        args.models_root, 'sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20')
+        args.models_root, "sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20"
+    )
     if not os.path.exists(d):
         raise ValueError(f"asr: model not found {d}")
 
@@ -130,15 +132,16 @@ def create_zipformer(samplerate: int, args) -> sherpa_onnx.OnlineRecognizer:
 
 
 def create_sensevoice(samplerate: int, args) -> sherpa_onnx.OfflineRecognizer:
-    d = os.path.join(args.models_root,
-                     'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17')
+    d = os.path.join(
+        args.models_root, "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17"
+    )
 
     if not os.path.exists(d):
         raise ValueError(f"asr: model not found {d}")
 
     recognizer = sherpa_onnx.OfflineRecognizer.from_sense_voice(
-        model=os.path.join(d, 'model.onnx'),
-        tokens=os.path.join(d, 'tokens.txt'),
+        model=os.path.join(d, "model.onnx"),
+        tokens=os.path.join(d, "tokens.txt"),
         num_threads=args.threads,
         sample_rate=samplerate,
         use_itn=True,
@@ -150,13 +153,14 @@ def create_sensevoice(samplerate: int, args) -> sherpa_onnx.OfflineRecognizer:
 
 def create_paraformer_trilingual(samplerate: int, args) -> sherpa_onnx.OnlineRecognizer:
     d = os.path.join(
-        args.models_root, 'sherpa-onnx-paraformer-trilingual-zh-cantonese-en')
+        args.models_root, "sherpa-onnx-paraformer-trilingual-zh-cantonese-en"
+    )
     if not os.path.exists(d):
         raise ValueError(f"asr: model not found {d}")
 
     recognizer = sherpa_onnx.OfflineRecognizer.from_paraformer(
-        paraformer=os.path.join(d, 'model.onnx'),
-        tokens=os.path.join(d, 'tokens.txt'),
+        paraformer=os.path.join(d, "model.onnx"),
+        tokens=os.path.join(d, "tokens.txt"),
         num_threads=args.threads,
         sample_rate=samplerate,
         debug=0,
@@ -166,14 +170,13 @@ def create_paraformer_trilingual(samplerate: int, args) -> sherpa_onnx.OnlineRec
 
 
 def create_paraformer_en(samplerate: int, args) -> sherpa_onnx.OnlineRecognizer:
-    d = os.path.join(
-        args.models_root, 'sherpa-onnx-paraformer-en')
+    d = os.path.join(args.models_root, "sherpa-onnx-paraformer-en")
     if not os.path.exists(d):
         raise ValueError(f"asr: model not found {d}")
 
     recognizer = sherpa_onnx.OfflineRecognizer.from_paraformer(
-        paraformer=os.path.join(d, 'model.onnx'),
-        tokens=os.path.join(d, 'tokens.txt'),
+        paraformer=os.path.join(d, "model.onnx"),
+        tokens=os.path.join(d, "tokens.txt"),
         num_threads=args.threads,
         sample_rate=samplerate,
         use_itn=True,
@@ -188,17 +191,17 @@ def load_asr_engine(samplerate: int, args) -> sherpa_onnx.OnlineRecognizer:
     if cache_engine:
         return cache_engine
     st = time.time()
-    if args.asr_model == 'zipformer-bilingual':
+    if args.asr_model == "zipformer-bilingual":
         cache_engine = create_zipformer(samplerate, args)
-    elif args.asr_model == 'sensevoice':
+    elif args.asr_model == "sensevoice":
         cache_engine = create_sensevoice(samplerate, args)
-        _asr_engines['vad'] = load_vad_engine(samplerate, args)
-    elif args.asr_model == 'paraformer-trilingual':
+        _asr_engines["vad"] = load_vad_engine(samplerate, args)
+    elif args.asr_model == "paraformer-trilingual":
         cache_engine = create_paraformer_trilingual(samplerate, args)
-        _asr_engines['vad'] = load_vad_engine(samplerate, args)
-    elif args.asr_model == 'paraformer-en':
+        _asr_engines["vad"] = load_vad_engine(samplerate, args)
+    elif args.asr_model == "paraformer-en":
         cache_engine = create_paraformer_en(samplerate, args)
-        _asr_engines['vad'] = load_vad_engine(samplerate, args)
+        _asr_engines["vad"] = load_vad_engine(samplerate, args)
     else:
         raise ValueError(f"asr: unknown model {args.asr_model}")
     _asr_engines[args.asr_model] = cache_engine
@@ -206,21 +209,26 @@ def load_asr_engine(samplerate: int, args) -> sherpa_onnx.OnlineRecognizer:
     return cache_engine
 
 
-def load_vad_engine(samplerate: int, args, min_silence_duration: float = 0.25, buffer_size_in_seconds: int = 100) -> sherpa_onnx.VoiceActivityDetector:
+def load_vad_engine(
+    samplerate: int,
+    args,
+    min_silence_duration: float = 0.25,
+    buffer_size_in_seconds: int = 100,
+) -> sherpa_onnx.VoiceActivityDetector:
     config = sherpa_onnx.VadModelConfig()
-    d = os.path.join(args.models_root, 'silero_vad')
+    d = os.path.join(args.models_root, "silero_vad")
     if not os.path.exists(d):
         raise ValueError(f"vad: model not found {d}")
 
-    config.silero_vad.model = os.path.join(d, 'silero_vad.onnx')
+    config.silero_vad.model = os.path.join(d, "silero_vad.onnx")
     config.silero_vad.min_silence_duration = min_silence_duration
     config.sample_rate = samplerate
     config.provider = args.asr_provider
     config.num_threads = args.threads
 
     vad = sherpa_onnx.VoiceActivityDetector(
-        config,
-        buffer_size_in_seconds=buffer_size_in_seconds)
+        config, buffer_size_in_seconds=buffer_size_in_seconds
+    )
     return vad
 
 
