@@ -1,4 +1,4 @@
-from typing import Union
+from typing import Union, Tuple
 import logging
 import time
 import sherpa_onnx
@@ -67,7 +67,8 @@ class ASRStream:
 
     async def run_offline(self):
         vad = _asr_engines["vad"]
-        segment_id = 0
+        sid, sid_manager = _asr_engines["sid"]
+        segment_id, speaker_id = 0, 0
         st = None
         while not self.is_closed:
             samples = await self.inbuf.get()
@@ -75,18 +76,40 @@ class ASRStream:
             while not vad.empty():
                 if not st:
                     st = time.time()
-                stream = self.recognizer.create_stream()
-                stream.accept_waveform(self.sample_rate, vad.front.samples)
+                # ASR
+                asr_stream = self.recognizer.create_stream()
+                asr_stream.accept_waveform(self.sample_rate, vad.front.samples)
+                # SID
+                sid_stream = sid.create_stream()
+                sid_stream.accept_waveform(self.sample_rate, vad.front.samples)
 
                 vad.pop()
-                self.recognizer.decode_stream(stream)
 
-                result = stream.result.text.strip()
+                # SID
+                embedding = sid.compute(sid_stream)
+                embedding = np.array(embedding)
+                name = sid_manager.search(embedding, threshold=0.4)
+                if not name:
+                    # register it
+                    new_name = f"speaker_{speaker_id}"
+                    status = sid_manager.add(new_name, embedding)
+                    if not status:
+                        raise RuntimeError(f"Failed to register speaker {new_name}")
+                    print(
+                        f"{segment_id}: Detected new speaker. Register it as {new_name}"
+                    )
+                    speaker_id += 1
+                else:
+                    print(f"{segment_id}: Detected existing speaker: {name}")
+                # ASR
+                self.recognizer.decode_stream(asr_stream)
+                result = asr_stream.result.text.strip()
                 if result:
                     duration = time.time() - st
                     logger.info(f"{segment_id}:{result} ({duration:.2f}s)")
                     self.outbuf.put_nowait(ASRResult(result, True, segment_id))
                     segment_id += 1
+
             st = None
 
     async def close(self):
@@ -196,12 +219,15 @@ def load_asr_engine(samplerate: int, args) -> sherpa_onnx.OnlineRecognizer:
     elif args.asr_model == "sensevoice":
         cache_engine = create_sensevoice(samplerate, args)
         _asr_engines["vad"] = load_vad_engine(samplerate, args)
+        _asr_engines["sid"] = load_sid_engine(samplerate, args)
     elif args.asr_model == "paraformer-trilingual":
         cache_engine = create_paraformer_trilingual(samplerate, args)
         _asr_engines["vad"] = load_vad_engine(samplerate, args)
+        _asr_engines["sid"] = load_sid_engine(samplerate, args)
     elif args.asr_model == "paraformer-en":
         cache_engine = create_paraformer_en(samplerate, args)
         _asr_engines["vad"] = load_vad_engine(samplerate, args)
+        _asr_engines["sid"] = load_sid_engine(samplerate, args)
     else:
         raise ValueError(f"asr: unknown model {args.asr_model}")
     _asr_engines[args.asr_model] = cache_engine
@@ -230,6 +256,25 @@ def load_vad_engine(
         config, buffer_size_in_seconds=buffer_size_in_seconds
     )
     return vad
+
+
+def load_sid_engine(
+    samplerate: int,
+    args,
+) -> Tuple[sherpa_onnx.SpeakerEmbeddingExtractor, sherpa_onnx.SpeakerEmbeddingManager]:
+    d = os.path.join(
+        args.models_root, "3dspeaker_speech_eres2net_large_sv_zh-cn_3dspeaker_16k.onnx"
+    )
+    config = sherpa_onnx.SpeakerEmbeddingExtractorConfig(
+        model=d,
+        num_threads=args.threads,
+        provider=args.asr_provider,
+    )
+
+    if not config.validate():
+        raise ValueError(f"Invalid config. {config}")
+    sid = sherpa_onnx.SpeakerEmbeddingExtractor(config)
+    return (sid, sherpa_onnx.SpeakerEmbeddingManager(sid.dim))
 
 
 async def start_asr_stream(samplerate: int, args) -> ASRStream:
