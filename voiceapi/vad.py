@@ -1,4 +1,4 @@
-from typing import Union, Tuple, List
+from typing import Tuple, List
 import logging
 import time
 import sherpa_onnx
@@ -7,6 +7,7 @@ import asyncio
 import numpy as np
 
 logger = logging.getLogger(__file__)
+_vad_engines = dict()
 
 
 class VADStream:
@@ -33,7 +34,7 @@ class VADStream:
 
     async def run_offline(self):
         vad = self.model
-        segment_id, speaker_id = 0, 0
+        segment_id = 0
         st = None
         while not self.is_closed:
             samples = await self.inbuf.get()
@@ -68,21 +69,23 @@ def load_vad_engine(
     min_silence_duration: float = 0.25,
     buffer_size_in_seconds: int = 100,
 ) -> sherpa_onnx.VoiceActivityDetector:
-    config = sherpa_onnx.VadModelConfig()
-    d = os.path.join(args.models_root, "silero_vad")
-    if not os.path.exists(d):
-        raise ValueError(f"vad: model not found {d}")
+    if "vad" not in _vad_engines:
+        config = sherpa_onnx.VadModelConfig()
+        d = os.path.join(args.models_root, "silero_vad")
+        if not os.path.exists(d):
+            raise ValueError(f"vad: model not found {d}")
 
-    config.silero_vad.model = os.path.join(d, "silero_vad.onnx")
-    config.silero_vad.min_silence_duration = min_silence_duration
-    config.sample_rate = samplerate
-    config.provider = args.asr_provider
-    config.num_threads = args.threads
+        config.silero_vad.model = os.path.join(d, "silero_vad.onnx")
+        config.silero_vad.min_silence_duration = min_silence_duration
+        config.sample_rate = samplerate
+        config.provider = args.asr_provider
+        config.num_threads = args.threads
 
-    vad = sherpa_onnx.VoiceActivityDetector(
-        config, buffer_size_in_seconds=buffer_size_in_seconds
-    )
-    return vad
+        vad = sherpa_onnx.VoiceActivityDetector(
+            config, buffer_size_in_seconds=buffer_size_in_seconds
+        )
+        _vad_engines["vad"] = vad
+    return _vad_engines["vad"]
 
 
 async def start_vad_stream(samplerate: int, args) -> VADStream:
