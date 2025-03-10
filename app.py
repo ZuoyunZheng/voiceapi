@@ -1,3 +1,4 @@
+from typing import Tuple, List
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Query
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -7,6 +8,7 @@ from pydantic import BaseModel, Field
 import uvicorn
 from voiceapi.tts import TTSResult, start_tts_stream, TTSStream
 from voiceapi.asr import start_asr_stream, ASRStream, ASRResult
+from voiceapi.vad import start_vad_stream, VADStream
 import argparse
 import os
 
@@ -23,28 +25,42 @@ async def websocket_asr(
 ):
     await websocket.accept()
 
+    vad_stream: VADStream = await start_vad_stream(samplerate, args)
+    if not vad_stream:
+        logger.error("failed to start VAD stream")
+        await websocket.close()
+        return
+
     asr_stream: ASRStream = await start_asr_stream(samplerate, args)
     if not asr_stream:
         logger.error("failed to start ASR stream")
         await websocket.close()
         return
 
+    # sid_stream: SIDStream = await start_sid_stream(samplerate, args)
+    # if not sid_stream:
+    #    logger.error("failed to start SID stream")
+    #    await websocket.close()
+    #    return
+
     async def task_recv_pcm():
         while True:
             pcm_bytes = await websocket.receive_bytes()
             if not pcm_bytes:
                 return
-            await asr_stream.write(pcm_bytes)
+            await vad_stream.write(pcm_bytes)
 
-    async def task_send_result():
+    async def task_asr_recv_vad():
         while True:
-            result: ASRResult = await asr_stream.read()
-            if not result:
+            # TODO: something like read from vad stream
+            vad_result: Tuple[int, List] = await vad_stream.read()
+            asr_result: ASRResult = await asr_stream.write(vad_result)
+            if not asr_result:
                 return
-            await websocket.send_json(result.to_dict())
+            await websocket.send_json(asr_result.to_dict())
 
     try:
-        await asyncio.gather(task_recv_pcm(), task_send_result())
+        await asyncio.gather(task_recv_pcm(), task_asr_recv_vad())
     except WebSocketDisconnect:
         logger.info("asr: disconnected")
     finally:

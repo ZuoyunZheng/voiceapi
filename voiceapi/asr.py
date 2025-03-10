@@ -1,13 +1,12 @@
-from typing import Union, Tuple
+from typing import Union, Tuple, List
 import logging
 import time
 import sherpa_onnx
 import os
 import asyncio
-import numpy as np
 
 logger = logging.getLogger(__file__)
-_asr_engines = {}
+_asr_engines = dict()
 
 
 class ASRResult:
@@ -40,6 +39,7 @@ class ASRStream:
             asyncio.create_task(self.run_offline())
 
     async def run_online(self):
+        raise NotImplementedError("Online ASR not implemented")
         stream = self.recognizer.create_stream()
         last_result = ""
         segment_id = 0
@@ -66,49 +66,20 @@ class ASRStream:
                 self.recognizer.reset(stream)
 
     async def run_offline(self):
-        vad = _asr_engines["vad"]
-        sid, sid_manager = _asr_engines["sid"]
-        segment_id, speaker_id = 0, 0
         st = None
         while not self.is_closed:
-            samples = await self.inbuf.get()
-            vad.accept_waveform(samples)
-            while not vad.empty():
-                if not st:
-                    st = time.time()
-                # ASR
-                asr_stream = self.recognizer.create_stream()
-                asr_stream.accept_waveform(self.sample_rate, vad.front.samples)
-                # SID
-                sid_stream = sid.create_stream()
-                sid_stream.accept_waveform(self.sample_rate, vad.front.samples)
+            segment_id, samples = await self.inbuf.get()
+            if not st:
+                st = time.time()
+            asr_stream = self.recognizer.create_stream()
+            asr_stream.accept_waveform(self.sample_rate, samples)
 
-                vad.pop()
-
-                # SID
-                embedding = sid.compute(sid_stream)
-                embedding = np.array(embedding)
-                name = sid_manager.search(embedding, threshold=0.4)
-                if not name:
-                    # register it
-                    new_name = f"speaker_{speaker_id}"
-                    status = sid_manager.add(new_name, embedding)
-                    if not status:
-                        raise RuntimeError(f"Failed to register speaker {new_name}")
-                    print(
-                        f"{segment_id}: Detected new speaker. Register it as {new_name}"
-                    )
-                    speaker_id += 1
-                else:
-                    print(f"{segment_id}: Detected existing speaker: {name}")
-                # ASR
-                self.recognizer.decode_stream(asr_stream)
-                result = asr_stream.result.text.strip()
-                if result:
-                    duration = time.time() - st
-                    logger.info(f"{segment_id}:{result} ({duration:.2f}s)")
-                    self.outbuf.put_nowait(ASRResult(result, True, segment_id))
-                    segment_id += 1
+            self.recognizer.decode_stream(asr_stream)
+            result = asr_stream.result.text.strip()
+            if result:
+                duration = time.time() - st
+                logger.info(f"{segment_id}:{result} ({duration:.2f}s)")
+                self.outbuf.put_nowait(ASRResult(result, True, segment_id))
 
             st = None
 
@@ -116,10 +87,8 @@ class ASRStream:
         self.is_closed = True
         self.outbuf.put_nowait(None)
 
-    async def write(self, pcm_bytes: bytes):
-        pcm_data = np.frombuffer(pcm_bytes, dtype=np.int16)
-        samples = pcm_data.astype(np.float32) / 32768.0
-        self.inbuf.put_nowait(samples)
+    async def write(self, vad_samples: Tuple[int, List]):
+        self.inbuf.put_nowait(vad_samples)
 
     async def read(self) -> ASRResult:
         return await self.outbuf.get()
@@ -218,44 +187,15 @@ def load_asr_engine(samplerate: int, args) -> sherpa_onnx.OnlineRecognizer:
         cache_engine = create_zipformer(samplerate, args)
     elif args.asr_model == "sensevoice":
         cache_engine = create_sensevoice(samplerate, args)
-        _asr_engines["vad"] = load_vad_engine(samplerate, args)
-        _asr_engines["sid"] = load_sid_engine(samplerate, args)
     elif args.asr_model == "paraformer-trilingual":
         cache_engine = create_paraformer_trilingual(samplerate, args)
-        _asr_engines["vad"] = load_vad_engine(samplerate, args)
-        _asr_engines["sid"] = load_sid_engine(samplerate, args)
     elif args.asr_model == "paraformer-en":
         cache_engine = create_paraformer_en(samplerate, args)
-        _asr_engines["vad"] = load_vad_engine(samplerate, args)
-        _asr_engines["sid"] = load_sid_engine(samplerate, args)
     else:
         raise ValueError(f"asr: unknown model {args.asr_model}")
     _asr_engines[args.asr_model] = cache_engine
     logger.info(f"asr: engine loaded in {time.time() - st:.2f}s")
     return cache_engine
-
-
-def load_vad_engine(
-    samplerate: int,
-    args,
-    min_silence_duration: float = 0.25,
-    buffer_size_in_seconds: int = 100,
-) -> sherpa_onnx.VoiceActivityDetector:
-    config = sherpa_onnx.VadModelConfig()
-    d = os.path.join(args.models_root, "silero_vad")
-    if not os.path.exists(d):
-        raise ValueError(f"vad: model not found {d}")
-
-    config.silero_vad.model = os.path.join(d, "silero_vad.onnx")
-    config.silero_vad.min_silence_duration = min_silence_duration
-    config.sample_rate = samplerate
-    config.provider = args.asr_provider
-    config.num_threads = args.threads
-
-    vad = sherpa_onnx.VoiceActivityDetector(
-        config, buffer_size_in_seconds=buffer_size_in_seconds
-    )
-    return vad
 
 
 def load_sid_engine(
