@@ -29,7 +29,7 @@ class VADStream:
         # ZeroMQ context
         self.context = zmq.asyncio.Context()
         self.push_socket = self.context.socket(zmq.PUSH)
-        self.push_socket.bind(push_port)
+        self.push_socket.connect(push_port)
         self.pull_socket = self.context.socket(zmq.PULL)
         self.pull_socket.bind(pull_port)
 
