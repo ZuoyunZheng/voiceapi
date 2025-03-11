@@ -8,10 +8,11 @@ from pydantic import BaseModel, Field
 import uvicorn
 from voiceapi.tts import TTSResult, start_tts_stream, TTSStream
 from voiceapi.asr import start_asr_stream, ASRStream, ASRResult
-from voiceapi.vad import start_vad_stream, VADStream
 import argparse
 import os
+import zmq
 
+context = zmq.Context()
 app = FastAPI()
 logger = logging.getLogger(__file__)
 
@@ -25,24 +26,20 @@ async def websocket_asr(
 ):
     await websocket.accept()
 
-    # Module execution tasks created in stream.start()
-    vad_stream: VADStream = await start_vad_stream(samplerate, args)
-    if not vad_stream:
-        logger.error("failed to start VAD stream")
-        await websocket.close()
-        return
-
+    # Queue module execution tasks in stream.start()
     asr_stream: ASRStream = await start_asr_stream(samplerate, args)
     if not asr_stream:
         logger.error("failed to start ASR stream")
         await websocket.close()
         return
 
-    # sid_stream: SIDStream = await start_sid_stream(samplerate, args)
-    # if not sid_stream:
-    #     logger.error("failed to start SID stream")
-    #     await websocket.close()
-    #     return
+    # Set up ZeroMQ sockets
+    vad_push_port = "tcp://127.0.0.1:5557"
+    vad_pull_port = "tcp://127.0.0.1:5558"
+    vad_push_socket = context.socket(zmq.PUSH)
+    vad_push_socket.connect(vad_push_port)
+    vad_pull_socket = context.socket(zmq.PULL)
+    vad_pull_socket.connect(vad_pull_port)
 
     # Message passing pipeline
     # Raw bytes -> VAD
@@ -51,13 +48,12 @@ async def websocket_asr(
             pcm_bytes = await websocket.receive_bytes()
             if not pcm_bytes:
                 return
-            await vad_stream.write(pcm_bytes)
+            await vad_push_socket.send_pyobj(pcm_bytes)
 
     # VAD -> ASR
     async def task_asr_recv_vad():
         while True:
-            # TODO: something like read from vad stream
-            vad_result: Tuple[int, List] = await vad_stream.read()
+            vad_result: Tuple[int, List] = await vad_pull_socket.recv_pyobj()
             asr_result: ASRResult = await asr_stream.write(vad_result)
             if not asr_result:
                 return
@@ -68,8 +64,9 @@ async def websocket_asr(
     except WebSocketDisconnect:
         logger.info("asr: disconnected")
     finally:
-        await vad_stream.close()
         await asr_stream.close()
+        vad_push_socket.close()
+        vad_pull_socket.close()
 
 
 @app.websocket("/tts")
