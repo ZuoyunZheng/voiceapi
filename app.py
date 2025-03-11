@@ -11,8 +11,9 @@ from voiceapi.asr import start_asr_stream, ASRStream, ASRResult
 import argparse
 import os
 import zmq
+import zmq.asyncio
 
-context = zmq.Context()
+context = zmq.asyncio.Context()
 app = FastAPI()
 logger = logging.getLogger(__file__)
 
@@ -34,21 +35,22 @@ async def websocket_asr(
         return
 
     # Set up ZeroMQ sockets
-    vad_push_port = "tcp://127.0.0.1:5557"
-    vad_pull_port = "tcp://127.0.0.1:5558"
+    vad_push_port = "tcp://127.0.0.1:7001"
+    vad_pull_port = "tcp://127.0.0.1:7002"
     vad_push_socket = context.socket(zmq.PUSH)
     vad_push_socket.connect(vad_push_port)
     vad_pull_socket = context.socket(zmq.PULL)
     vad_pull_socket.connect(vad_pull_port)
 
-
     # Message passing pipeline
     # Raw bytes -> VAD
     async def task_recv_pcm():
         while True:
+            logger.info("Getting bytes")
             pcm_bytes = await websocket.receive_bytes()
             if not pcm_bytes:
                 return
+            logger.info("Sending bytes")
             await vad_push_socket.send_pyobj(pcm_bytes)
 
     # VAD -> ASR

@@ -111,10 +111,10 @@ if __name__ == "__main__":
         "--sample_rate", type=int, default=16000, help="Sample rate of the audio"
     )
     parser.add_argument(
-        "--push_port", type=str, default="tcp://127.0.0.1:5558", help="ZeroMQ push port"
+        "--push_port", type=str, default="tcp://127.0.0.1:7002", help="ZeroMQ push port"
     )
     parser.add_argument(
-        "--pull_port", type=str, default="tcp://127.0.0.1:5557", help="ZeroMQ pull port"
+        "--pull_port", type=str, default="tcp://127.0.0.1:7001", help="ZeroMQ pull port"
     )
     parser.add_argument(
         "--model_dir", type=str, default="./models", help="Root directory for models"
