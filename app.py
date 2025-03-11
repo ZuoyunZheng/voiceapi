@@ -39,9 +39,9 @@ async def websocket_asr(
 
     # sid_stream: SIDStream = await start_sid_stream(samplerate, args)
     # if not sid_stream:
-    #    logger.error("failed to start SID stream")
-    #    await websocket.close()
-    #    return
+    #     logger.error("failed to start SID stream")
+    #     await websocket.close()
+    #     return
 
     async def task_recv_pcm():
         while True:
