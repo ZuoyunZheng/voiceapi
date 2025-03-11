@@ -46,11 +46,9 @@ async def websocket_asr(
     # Raw bytes -> VAD
     async def task_recv_pcm():
         while True:
-            logger.info("Getting bytes")
             pcm_bytes = await websocket.receive_bytes()
             if not pcm_bytes:
                 return
-            logger.info("Sending bytes")
             await vad_push_socket.send_pyobj(pcm_bytes)
 
     # VAD -> ASR
