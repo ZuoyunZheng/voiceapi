@@ -41,6 +41,7 @@ async def websocket_asr(
     vad_pull_socket = context.socket(zmq.PULL)
     vad_pull_socket.connect(vad_pull_port)
 
+
     # Message passing pipeline
     # Raw bytes -> VAD
     async def task_recv_pcm():

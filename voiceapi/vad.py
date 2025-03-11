@@ -11,7 +11,6 @@ import argparse
 
 logger = logging.getLogger(__file__)
 _vad_engines = dict()
-context = zmq.Context()
 
 
 class VADStream:
@@ -125,6 +124,11 @@ if __name__ == "__main__":
     )
     parser.add_argument("--threads", type=int, default=2, help="Number of threads")
     args = parser.parse_args()
+
+    logging.basicConfig(
+        format="%(levelname)s: %(asctime)s %(name)s:%(lineno)s %(message)s",
+        level=logging.INFO,
+    )
 
     loop = asyncio.get_event_loop()
     vad_stream = loop.run_until_complete(start_vad_stream(args))
