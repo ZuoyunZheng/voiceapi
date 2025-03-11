@@ -72,6 +72,7 @@ def load_vad_engine(
     min_silence_duration: float = 0.25,
     buffer_size_in_seconds: int = 100,
 ) -> sherpa_onnx.VoiceActivityDetector:
+    st = time.time()
     if "vad" not in _vad_engines:
         config = sherpa_onnx.VadModelConfig()
         d = os.path.join(model_dir, "silero_vad")
@@ -88,6 +89,7 @@ def load_vad_engine(
             config, buffer_size_in_seconds=buffer_size_in_seconds
         )
         _vad_engines["vad"] = vad
+    logger.info(f"asr: engine loaded in {time.time() - st:.2f}s")
     return _vad_engines["vad"]
 
 
