@@ -25,6 +25,7 @@ async def websocket_asr(
 ):
     await websocket.accept()
 
+    # Module execution tasks created in stream.start()
     vad_stream: VADStream = await start_vad_stream(samplerate, args)
     if not vad_stream:
         logger.error("failed to start VAD stream")
@@ -43,6 +44,8 @@ async def websocket_asr(
     #     await websocket.close()
     #     return
 
+    # Message passing pipeline
+    # Raw bytes -> VAD
     async def task_recv_pcm():
         while True:
             pcm_bytes = await websocket.receive_bytes()
@@ -50,6 +53,7 @@ async def websocket_asr(
                 return
             await vad_stream.write(pcm_bytes)
 
+    # VAD -> ASR
     async def task_asr_recv_vad():
         while True:
             # TODO: something like read from vad stream
@@ -64,6 +68,7 @@ async def websocket_asr(
     except WebSocketDisconnect:
         logger.info("asr: disconnected")
     finally:
+        await vad_stream.close()
         await asr_stream.close()
 
 
