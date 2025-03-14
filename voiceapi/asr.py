@@ -37,10 +37,17 @@ class ASRStream:
         self.online = isinstance(model, sherpa_onnx.OnlineRecognizer)
         # ZeroMQ context
         self.context = zmq.asyncio.Context()
-        self.push_socket = self.context.socket(zmq.PUSH)
-        self.push_socket.connect(push_port)
-        self.pull_socket = self.context.socket(zmq.PULL)
-        self.pull_socket.bind(pull_port)
+        for i in range(10):
+            try:
+                self.push_socket = self.context.socket(zmq.PUSH)
+                self.push_socket.connect(push_port)
+                self.pull_socket = self.context.socket(zmq.PULL)
+                self.pull_socket.bind(pull_port)
+            except zmq.ZMQError as e:
+                if i > 8:
+                    exit(1)
+                logger.info(f"Waiting for DNS to resolve\n{e}")
+                time.sleep(2)
 
     async def start(self):
         if self.online:
@@ -274,7 +281,11 @@ if __name__ == "__main__":
         "--provider", type=str, default="cpu", help="provider, cpu or cuda"
     )
     parser.add_argument("--threads", type=int, default=2, help="Number of threads")
+    parser.add_argument("--docker", action="store_true", help="Docker serving, use DNS")
     args = parser.parse_args()
+    if args.docker:
+        args.push_port = args.push_port.replace("127.0.0.1", "0.0.0.0")
+        args.pull_port = args.pull_port.replace("127.0.0.1", "0.0.0.0")
 
     logging.basicConfig(
         format="%(levelname)s: %(asctime)s %(name)s:%(lineno)s %(message)s",

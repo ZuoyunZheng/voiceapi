@@ -1,0 +1,32 @@
+name: voiceapi
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.app
+    container_name: app
+    ports:
+      - "7000:7000"
+    depends_on:
+      - vad
+      - asr
+
+  vad:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.vad
+    volumes:
+      - ./models:/app/models:ro
+    container_name: vad
+
+  asr:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.asr
+    volumes:
+      - ./models:/app/models:ro
+    container_name: asr
+
+networks:
+  default:
+    driver: bridge

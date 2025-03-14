@@ -11,6 +11,8 @@ import zmq.asyncio
 
 context = zmq.asyncio.Context()
 app = FastAPI()
+vad_address, vad_port = "0.0.0.0", "7001"
+asr_address, asr_port = "0.0.0.0", "7003"
 logger = logging.getLogger(__file__)
 
 
@@ -24,8 +26,8 @@ async def websocket_asr(
     await websocket.accept()
 
     # Set up ZeroMQ sockets
-    byte_push_port = "tcp://127.0.0.1:7001"
-    asr_pull_port = "tcp://127.0.0.1:7003"
+    byte_push_port = f"tcp://{vad_address}:{vad_port}"
+    asr_pull_port = f"tcp://{asr_address}:{asr_port}"
     byte_push_socket = context.socket(zmq.PUSH)
     byte_push_socket.connect(byte_push_port)
     asr_pull_socket = context.socket(zmq.PULL)
@@ -66,8 +68,9 @@ if __name__ == "__main__":
             break
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--port", type=int, default=8000, help="port number")
+    parser.add_argument("--port", type=int, default=7000, help="port number")
     parser.add_argument("--addr", type=str, default="0.0.0.0", help="serve address")
+    parser.add_argument("--docker", action="store_true", help="Docker serving, use DNS")
     args = parser.parse_args()
 
     app.mount("/", app=StaticFiles(directory="./assets", html=True), name="assets")
