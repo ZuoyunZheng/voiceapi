@@ -37,17 +37,10 @@ class ASRStream:
         self.online = isinstance(model, sherpa_onnx.OnlineRecognizer)
         # ZeroMQ context
         self.context = zmq.asyncio.Context()
-        for i in range(10):
-            try:
-                self.push_socket = self.context.socket(zmq.PUSH)
-                self.push_socket.connect(push_port)
-                self.pull_socket = self.context.socket(zmq.PULL)
-                self.pull_socket.bind(pull_port)
-            except zmq.ZMQError as e:
-                if i > 8:
-                    exit(1)
-                logger.info(f"Waiting for DNS to resolve\n{e}")
-                time.sleep(2)
+        self.push_socket = self.context.socket(zmq.PUSH)
+        self.push_socket.connect(push_port)
+        self.pull_socket = self.context.socket(zmq.PULL)
+        self.pull_socket.bind(pull_port)
 
     async def start(self):
         if self.online:

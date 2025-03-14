@@ -27,6 +27,7 @@ class VADStream:
         self.sample_rate = sample_rate
         self.online = False
         # ZeroMQ context
+        time.sleep(4)
         self.context = zmq.asyncio.Context()
         self.push_socket = self.context.socket(zmq.PUSH)
         self.push_socket.connect(push_port)
@@ -46,6 +47,7 @@ class VADStream:
         vad, segment_id, st = self.model, 0, None
         while True:
             pcm_bytes = await self.pull_socket.recv_pyobj()
+            logger.info("Received mic bytes")
             pcm_data = np.frombuffer(pcm_bytes, dtype=np.int16)
             samples = pcm_data.astype(np.float32) / 32768.0
             vad.accept_waveform(samples)
@@ -89,7 +91,7 @@ def load_vad_engine(
             config, buffer_size_in_seconds=buffer_size_in_seconds
         )
         _vad_engines["vad"] = vad
-    logger.info(f"asr: engine loaded in {time.time() - st:.2f}s")
+    logger.info(f"vad: engine loaded in {time.time() - st:.2f}s")
     return _vad_engines["vad"]
 
 
@@ -113,10 +115,10 @@ if __name__ == "__main__":
         "--sample_rate", type=int, default=16000, help="Sample rate of the audio"
     )
     parser.add_argument(
-        "--push_port", type=str, default="tcp://127.0.0.1:7002", help="ZeroMQ push port"
+        "--push_port", type=str, default="tcp://127.0.0.1:8002", help="ZeroMQ push port"
     )
     parser.add_argument(
-        "--pull_port", type=str, default="tcp://127.0.0.1:7001", help="ZeroMQ pull port"
+        "--pull_port", type=str, default="tcp://127.0.0.1:8001", help="ZeroMQ pull port"
     )
     parser.add_argument(
         "--model_dir", type=str, default="./models", help="Root directory for models"

@@ -41,6 +41,7 @@ async def websocket_asr(
             if not pcm_bytes:
                 return
             await byte_push_socket.send_pyobj(pcm_bytes)
+            logger.info("Sent websocket bytes")
 
     # Receive results from ASR
     async def task_recv_asr():
@@ -68,10 +69,12 @@ if __name__ == "__main__":
             break
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--port", type=int, default=7000, help="port number")
-    parser.add_argument("--addr", type=str, default="0.0.0.0", help="serve address")
+    parser.add_argument("--port", type=int, default=8000, help="port number")
+    parser.add_argument("--addr", type=str, default="127.0.0.1", help="serve address")
     parser.add_argument("--docker", action="store_true", help="Docker serving, use DNS")
     args = parser.parse_args()
+    if args.docker:
+        args.addr = "0.0.0.0"
 
     app.mount("/", app=StaticFiles(directory="./assets", html=True), name="assets")
 
