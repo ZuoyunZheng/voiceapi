@@ -11,8 +11,8 @@ import zmq.asyncio
 
 context = zmq.asyncio.Context()
 app = FastAPI()
-vad_address, vad_port = "0.0.0.0", "7001"
-asr_address, asr_port = "0.0.0.0", "7003"
+vad_address, vad_port = "0.0.0.0", "8001"
+asr_address, asr_port = "0.0.0.0", "8003"
 logger = logging.getLogger(__file__)
 
 
@@ -31,7 +31,8 @@ async def websocket_asr(
     byte_push_socket = context.socket(zmq.PUSH)
     byte_push_socket.connect(byte_push_port)
     asr_pull_socket = context.socket(zmq.PULL)
-    asr_pull_socket.connect(asr_pull_port)
+    asr_pull_socket.bind(asr_pull_port)
+    logger.info(f"App ports: {byte_push_port}, {asr_pull_port}")
 
     # Message passing pipeline
     # Push raw bytes -> VAD

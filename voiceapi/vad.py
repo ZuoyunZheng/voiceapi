@@ -47,7 +47,7 @@ class VADStream:
         vad, segment_id, st = self.model, 0, None
         while True:
             pcm_bytes = await self.pull_socket.recv_pyobj()
-            logger.info("Received mic bytes")
+            # logger.info("Received mic bytes")
             pcm_data = np.frombuffer(pcm_bytes, dtype=np.int16)
             samples = pcm_data.astype(np.float32) / 32768.0
             vad.accept_waveform(samples)
@@ -91,7 +91,7 @@ def load_vad_engine(
             config, buffer_size_in_seconds=buffer_size_in_seconds
         )
         _vad_engines["vad"] = vad
-    logger.info(f"vad: engine loaded in {time.time() - st:.2f}s")
+    logger.info(f"VAD engine loaded in {time.time() - st:.2f}s")
     return _vad_engines["vad"]
 
 
@@ -141,7 +141,7 @@ if __name__ == "__main__":
     loop = asyncio.get_event_loop()
     vad_stream = loop.run_until_complete(start_vad_stream(args))
     # TODO: logger not printing here for some reason
-    logger.info("VAD stream started")
+    logger.info("VAD stream started with ports: {args.pull_port}, {args.push_port}")
 
     try:
         loop.run_forever()

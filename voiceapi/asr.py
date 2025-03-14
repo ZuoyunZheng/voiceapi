@@ -210,7 +210,7 @@ def load_asr_engine(
     else:
         raise ValueError(f"asr: unknown model {model_type}")
     _asr_engines[model_type] = cache_engine
-    logger.info(f"asr: engine loaded in {time.time() - st:.2f}s")
+    logger.info(f"ASR: engine loaded in {time.time() - st:.2f}s")
     return cache_engine
 
 
@@ -256,10 +256,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--sample_rate", type=int, default=16000, help="Sample rate")
     parser.add_argument(
-        "--push_port", type=str, default="tcp://127.0.0.1:7003", help="ZeroMQ push port"
+        "--push_port", type=str, default="tcp://127.0.0.1:8003", help="ZeroMQ push port"
     )
     parser.add_argument(
-        "--pull_port", type=str, default="tcp://127.0.0.1:7002", help="ZeroMQ pull port"
+        "--pull_port", type=str, default="tcp://127.0.0.1:8002", help="ZeroMQ pull port"
     )
     parser.add_argument(
         "--model_dir", type=str, default="./models", help="Root directory for models"
@@ -288,7 +288,7 @@ if __name__ == "__main__":
     loop = asyncio.get_event_loop()
     asr_stream = loop.run_until_complete(start_asr_stream(args))
     # TODO: logger not printing here for some reason
-    logger.info("ASR stream started")
+    logger.info(f"ASR stream started with ports: {args.pull_port}, {args.push_port}")
 
     try:
         loop.run_forever()
