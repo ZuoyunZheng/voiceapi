@@ -4,9 +4,6 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.app
-    environment:
-      - PULL_PORT=tcp://asr:8003
-    container_name: app
     ports:
       - "8000:8000"
     depends_on: # TODO: check dependency
@@ -20,8 +17,8 @@ services:
     volumes:
       - ./models:/app/models:ro
     environment:
+      - PUSH_PORT=tcp://*:8002
       - PULL_PORT=tcp://app:8001
-    container_name: vad
 
   asr:
     build:
@@ -30,8 +27,8 @@ services:
     volumes:
       - ./models:/app/models:ro
     environment:
+      - PUSH_PORT=tcp://*:8003
       - PULL_PORT=tcp://vad:8002
-    container_name: asr
 
 networks:
   default:

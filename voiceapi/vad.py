@@ -129,9 +129,8 @@ if __name__ == "__main__":
     parser.add_argument("--docker", action="store_true", help="Docker serving, use DNS")
     args = parser.parse_args()
     if args.docker:
-        args.push_port = args.push_port.replace("127.0.0.1", "*")
-        args.pull_port = args.pull_port.replace("127.0.0.1", "app")
-        # args.pull_port = os.environ.get("PULL_PORT")
+        args.push_port = os.environ.get("PUSH_PORT", args.push_port)
+        args.pull_port = os.environ.get("PULL_PORT", args.pull_port)
 
     logging.basicConfig(
         format="%(levelname)s: %(asctime)s %(name)s:%(lineno)s %(message)s",

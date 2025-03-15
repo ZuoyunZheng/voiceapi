@@ -74,11 +74,9 @@ if __name__ == "__main__":
     parser.add_argument("--addr", type=str, default="127.0.0.1", help="serve address")
     parser.add_argument("--docker", action="store_true", help="Docker serving, use DNS")
     args = parser.parse_args()
+    # TODO: make arg parsing better designed
     if args.docker:
-        args.addr = "0.0.0.0"
-        vad_address, asr_address = "*", "asr"
-        # pull_port = os.environ.get("PULL_PORT")
-        # asr_address, asr_port = pull_port.split("tcp://")[1].split(":")
+        args.addr, vad_address, asr_address = "0.0.0.0", "*", "asr"
 
     app.mount("/", app=StaticFiles(directory="./assets", html=True), name="assets")
 
