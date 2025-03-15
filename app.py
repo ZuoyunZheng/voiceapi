@@ -29,9 +29,9 @@ async def websocket_asr(
     byte_push_port = f"tcp://{vad_address}:{vad_port}"
     asr_pull_port = f"tcp://{asr_address}:{asr_port}"
     byte_push_socket = context.socket(zmq.PUSH)
-    byte_push_socket.connect(byte_push_port)
+    byte_push_socket.bind(byte_push_port)
     asr_pull_socket = context.socket(zmq.PULL)
-    asr_pull_socket.bind(asr_pull_port)
+    asr_pull_socket.connect(asr_pull_port)
     logger.info(f"App ports: {byte_push_port}, {asr_pull_port}")
 
     # Message passing pipeline
@@ -40,9 +40,9 @@ async def websocket_asr(
         while True:
             pcm_bytes = await websocket.receive_bytes()
             if not pcm_bytes:
+                logging.info("Received zero bytes, returning")
                 return
             await byte_push_socket.send_pyobj(pcm_bytes)
-            logger.info("Sent websocket bytes")
 
     # Receive results from ASR
     async def task_recv_asr():
@@ -76,6 +76,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
     if args.docker:
         args.addr = "0.0.0.0"
+        vad_address, asr_address = "*", "asr"
+        # pull_port = os.environ.get("PULL_PORT")
+        # asr_address, asr_port = pull_port.split("tcp://")[1].split(":")
 
     app.mount("/", app=StaticFiles(directory="./assets", html=True), name="assets")
 

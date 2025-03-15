@@ -38,9 +38,9 @@ class ASRStream:
         # ZeroMQ context
         self.context = zmq.asyncio.Context()
         self.push_socket = self.context.socket(zmq.PUSH)
-        self.push_socket.connect(push_port)
+        self.push_socket.bind(push_port)
         self.pull_socket = self.context.socket(zmq.PULL)
-        self.pull_socket.bind(pull_port)
+        self.pull_socket.connect(pull_port)
 
     async def start(self):
         if self.online:
@@ -277,8 +277,9 @@ if __name__ == "__main__":
     parser.add_argument("--docker", action="store_true", help="Docker serving, use DNS")
     args = parser.parse_args()
     if args.docker:
-        args.push_port = args.push_port.replace("127.0.0.1", "0.0.0.0")
-        args.pull_port = args.pull_port.replace("127.0.0.1", "0.0.0.0")
+        args.push_port = args.push_port.replace("127.0.0.1", "*")
+        args.pull_port = args.pull_port.replace("127.0.0.1", "vad")
+        # args.pull_port = os.environ.get("PULL_PORT")
 
     logging.basicConfig(
         format="%(levelname)s: %(asctime)s %(name)s:%(lineno)s %(message)s",
