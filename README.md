@@ -1,3 +1,17 @@
+# Voiceapi: Meeting Assistant
+
+## Roadmap
+- Frontend Streamlit UI
+  - [ ] transcription replay (format: <segment_id>: (<speaker_id>) <text>)
+  - [ ] system messages (New Speaker detected, AssistantAgent tool calls ... )
+- Backend
+  - [ ] SID service
+  - [ ] LLM service for summarization, in-meeting queries...
+  - [ ] TTS service for LLM service interaction
+
+---
+orig. [repo](https://github.com/ruzhila/voiceapi)
+
 # voiceapi - A simple and clean voice transcription/synthesis API with sherpa-onnx
 
 Thanks to [k2-fsa/sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx), we can easily build a voice API with Python.
