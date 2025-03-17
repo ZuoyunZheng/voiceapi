@@ -9,10 +9,10 @@ dependencies = [
     "pyzmq==26.3.0",
     "onnxruntime-gpu==1.19.2",
     "soundfile==0.12.1",
-    "fastapi==0.114.1",
+    "fastapi==0.115.2",
     "uvicorn==0.30.6",
     "scipy==1.13.1",
     "numpy==1.26.4",
-    "websockets==13.0.1",
-    # "sherpa-onnx==1.10.27+cuda" # cannot be used because no index server (--index <url>) are available
+    "websockets==15.0.1",
+    "gradio==5.20.0",
 ]
