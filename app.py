@@ -1,5 +1,4 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
-from fastapi.staticfiles import StaticFiles
 import asyncio
 import logging
 import uvicorn
@@ -8,6 +7,7 @@ import argparse
 import os
 import zmq
 import zmq.asyncio
+import json
 
 context = zmq.asyncio.Context()
 app = FastAPI()
@@ -24,6 +24,7 @@ async def websocket_asr(
     ),
 ):
     await websocket.accept()
+    await websocket.send_json(json.dumps("Connected to FastAPI websocket"))
 
     # Set up ZeroMQ sockets
     byte_push_port = f"tcp://{vad_address}:{vad_port}"
@@ -77,8 +78,6 @@ if __name__ == "__main__":
     # TODO: make arg parsing better designed
     if args.docker:
         args.addr, vad_address, asr_address = "0.0.0.0", "*", "asr"
-
-    app.mount("/", app=StaticFiles(directory="./assets", html=True), name="assets")
 
     logging.basicConfig(
         format="%(levelname)s: %(asctime)s %(name)s:%(lineno)s %(message)s",

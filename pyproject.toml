@@ -16,4 +16,5 @@ dependencies = [
     "websockets==15.0.1",
     "gradio==5.20.0",
     "streamlit>=1.43.2",
+    "pyaudio>=0.2.14",
 ]
