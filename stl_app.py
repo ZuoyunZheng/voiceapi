@@ -15,11 +15,15 @@ message_queue = Queue()
 
 
 def initialize_session_state():
+    global message_queue
     """Initialize the session state with default values"""
     if "connection_status" not in st.session_state:
         st.session_state["connection_status"] = "Disconnected"
     if "messages" not in st.session_state:
+        st.session_state["message_queue"] = message_queue
         st.session_state["messages"] = []
+    else:
+        message_queue = st.session_state["message_queue"]
     if "websocket_uri" not in st.session_state:
         st.session_state["websocket_uri"] = "ws://127.0.0.1:8000/asr"
     if "thread_started" not in st.session_state:
