@@ -15,7 +15,7 @@ orig. [repo](https://github.com/ruzhila/voiceapi)
 # voiceapi - A simple and clean voice transcription/synthesis API with sherpa-onnx
 
 Thanks to [k2-fsa/sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx), we can easily build a voice API with Python.
-<img src="./screenshot.jpg" width="60%">
+<img src="./assets/screenshot.jpg" width="60%">
 
 ## Supported models
 | Model                                  | Language                      | Type        | Description                         |

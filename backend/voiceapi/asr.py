@@ -214,24 +214,6 @@ def load_asr_engine(
     return cache_engine
 
 
-def load_sid_engine(
-    sample_rate: int, args
-) -> Tuple[sherpa_onnx.SpeakerEmbeddingExtractor, sherpa_onnx.SpeakerEmbeddingManager]:
-    d = os.path.join(
-        args.models_root, "3dspeaker_speech_eres2net_large_sv_zh-cn_3dspeaker_16k.onnx"
-    )
-    config = sherpa_onnx.SpeakerEmbeddingExtractorConfig(
-        model=d,
-        num_threads=args.threads,
-        provider=args.asr_provider,
-    )
-
-    if not config.validate():
-        raise ValueError(f"Invalid config. {config}")
-    sid = sherpa_onnx.SpeakerEmbeddingExtractor(config)
-    return (sid, sherpa_onnx.SpeakerEmbeddingManager(sid.dim))
-
-
 async def start_asr_stream(args) -> ASRStream:
     """
     Start a ASR stream

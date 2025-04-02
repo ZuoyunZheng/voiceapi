@@ -12,6 +12,7 @@ context = zmq.asyncio.Context()
 app = FastAPI()
 vad_address, vad_port = "0.0.0.0", "8001"
 asr_address, asr_port = "0.0.0.0", "8003"
+sid_address, sid_port = "0.0.0.0", "8004"
 logger = logging.getLogger(__file__)
 
 
@@ -27,11 +28,14 @@ async def websocket_asr(
     # Set up ZeroMQ sockets
     byte_push_port = f"tcp://{vad_address}:{vad_port}"
     asr_pull_port = f"tcp://{asr_address}:{asr_port}"
+    sid_pull_port = f"tcp://{sid_address}:{sid_port}"
     byte_push_socket = context.socket(zmq.PUSH)
     byte_push_socket.bind(byte_push_port)
     asr_pull_socket = context.socket(zmq.PULL)
     asr_pull_socket.connect(asr_pull_port)
-    logger.info(f"App ports: {byte_push_port}, {asr_pull_port}")
+    sid_pull_socket = context.socket(zmq.PULL)
+    sid_pull_socket.connect(sid_pull_port)
+    logger.info(f"App ports: {byte_push_port}, {asr_pull_port}, {sid_pull_port}")
 
     # Message passing pipeline
     # Push raw bytes -> VAD
@@ -51,8 +55,16 @@ async def websocket_asr(
                 return
             await websocket.send_json(asr_result.to_dict())
 
+    # Receive results from SID
+    async def task_recv_sid():
+        while True:
+            sid_result: dict = await sid_pull_socket.recv_pyobj()
+            if not sid_result:
+                return
+            await websocket.send_json(sid_result)
+
     try:
-        await asyncio.gather(task_recv_pcm(), task_recv_asr())
+        await asyncio.gather(task_recv_pcm(), task_recv_asr(), task_recv_sid())
     except WebSocketDisconnect:
         logger.info("asr: disconnected")
     finally:

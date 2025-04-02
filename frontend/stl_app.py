@@ -187,7 +187,10 @@ def main():
             st.session_state["messages"][-10:]
         ):  # Show last 10 messages
             st.text(f"Message {i + 1}:")
-            st.json(msg)
+            try:
+                st.json(msg)
+            except SyntaxError as e:
+                st.text(msg)
 
 
 if __name__ == "__main__":

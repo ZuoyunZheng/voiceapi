@@ -13,22 +13,45 @@ services:
   vad:
     build:
       context: .
-      dockerfile: docker/Dockerfile.vad
+      dockerfile: docker/Dockerfile.sherpa
     volumes:
       - ./models:/app/models:ro
     environment:
       - PUSH_PORT=tcp://*:8002
       - PULL_PORT=tcp://app:8001
+    # ports:
+    #   - "8001:8001"
+    #   - "8002:8002"
+    command: uv run voiceapi/vad.py --docker
+     
 
   asr:
     build:
       context: .
-      dockerfile: docker/Dockerfile.asr
+      dockerfile: docker/Dockerfile.sherpa
     volumes:
       - ./models:/app/models:ro
     environment:
       - PUSH_PORT=tcp://*:8003
       - PULL_PORT=tcp://vad:8002
+    # ports:
+    #   - "8002:8002"
+    #   - "8003:8003"
+    command: uv run voiceapi/asr.py --docker
+
+  sid:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.sherpa
+    volumes:
+      - ./models:/app/models:ro
+    environment:
+      - PUSH_PORT=tcp://*:8004
+      - PULL_PORT=tcp://vad:8002
+    # ports:
+    #   - "8002:8002"
+    #   - "8004:8004"
+    command: uv run voiceapi/sid.py --docker
 
 networks:
   default:

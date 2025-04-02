@@ -27,7 +27,6 @@ class VADStream:
         self.sample_rate = sample_rate
         self.online = False
         # ZeroMQ context
-        time.sleep(4)
         self.context = zmq.asyncio.Context()
         self.push_socket = self.context.socket(zmq.PUSH)
         self.push_socket.bind(push_port)
