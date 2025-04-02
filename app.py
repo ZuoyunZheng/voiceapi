@@ -1,5 +1,4 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
-from fastapi.staticfiles import StaticFiles
 import asyncio
 import logging
 import uvicorn
@@ -77,8 +76,6 @@ if __name__ == "__main__":
     # TODO: make arg parsing better designed
     if args.docker:
         args.addr, vad_address, asr_address = "0.0.0.0", "*", "asr"
-
-    app.mount("/", app=StaticFiles(directory="./assets", html=True), name="assets")
 
     logging.basicConfig(
         format="%(levelname)s: %(asctime)s %(name)s:%(lineno)s %(message)s",
