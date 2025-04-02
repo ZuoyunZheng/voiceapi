@@ -7,6 +7,6 @@ ENV PATH="$PATH:/root/.local/bin"
 WORKDIR /app
 RUN uv venv --python 3.10
 COPY pyproject.toml uv.lock ./
-RUN uv sync
+RUN uv sync --extra sherpa
 RUN uv pip install sherpa-onnx==1.10.27+cuda -f https://k2-fsa.github.io/sherpa/onnx/cuda.html
-COPY voiceapi ./voiceapi
+COPY backend ./backend

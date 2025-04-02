@@ -2,7 +2,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
 import asyncio
 import logging
 import uvicorn
-from voiceapi.asr import ASRResult
+from utils import ASRResult
 import argparse
 import os
 import zmq

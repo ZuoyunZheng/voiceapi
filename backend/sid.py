@@ -3,6 +3,7 @@ import logging
 import time
 import sherpa_onnx
 import os
+import numpy as np
 import asyncio
 import zmq
 import zmq.asyncio
@@ -58,7 +59,7 @@ class SIDStream:
             if not name:
                 # register it
                 name = f"speaker_{self.num_speakers}"
-                status = sid_manager.add(new_name, embedding)
+                status = sid_manager.add(name, embedding)
                 if not status:
                     raise RuntimeError(f"Failed to register speaker {name}")
                 logger.info(

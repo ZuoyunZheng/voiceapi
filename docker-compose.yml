@@ -1,9 +1,11 @@
 name: voiceapi
 services:
+  # Frontend
+  # Backend
   app:
     build:
       context: .
-      dockerfile: docker/Dockerfile.app
+      dockerfile: backend/docker/Dockerfile.app
     ports:
       - "8000:8000"
     depends_on: # TODO: check dependency
@@ -13,7 +15,7 @@ services:
   vad:
     build:
       context: .
-      dockerfile: docker/Dockerfile.sherpa
+      dockerfile: backend/docker/Dockerfile.sherpa
     volumes:
       - ./models:/app/models:ro
     environment:
@@ -22,13 +24,12 @@ services:
     # ports:
     #   - "8001:8001"
     #   - "8002:8002"
-    command: uv run voiceapi/vad.py --docker
-     
+    command: uv run backend/vad.py --docker
 
   asr:
     build:
       context: .
-      dockerfile: docker/Dockerfile.sherpa
+      dockerfile: backend/docker/Dockerfile.sherpa
     volumes:
       - ./models:/app/models:ro
     environment:
@@ -37,12 +38,12 @@ services:
     # ports:
     #   - "8002:8002"
     #   - "8003:8003"
-    command: uv run voiceapi/asr.py --docker
+    command: uv run backend/asr.py --docker
 
   sid:
     build:
       context: .
-      dockerfile: docker/Dockerfile.sherpa
+      dockerfile: backend/docker/Dockerfile.sherpa
     volumes:
       - ./models:/app/models:ro
     environment:
@@ -51,7 +52,7 @@ services:
     # ports:
     #   - "8002:8002"
     #   - "8004:8004"
-    command: uv run voiceapi/sid.py --docker
+    command: uv run backend/sid.py --docker
 
 networks:
   default:
