@@ -7,9 +7,12 @@ import argparse
 import os
 import zmq
 import zmq.asyncio
+from collections import defaultdict
 
 context = zmq.asyncio.Context()
 app = FastAPI()
+# mic -ws:.../8000/asr-> app -8001-> vad -8002-> asr -8003-> app -ws->
+#                                        \8002-> sid -8004->
 vad_address, vad_port = "0.0.0.0", "8001"
 asr_address, asr_port = "0.0.0.0", "8003"
 sid_address, sid_port = "0.0.0.0", "8004"
@@ -35,11 +38,17 @@ async def websocket_asr(
     asr_pull_socket.connect(asr_pull_port)
     sid_pull_socket = context.socket(zmq.PULL)
     sid_pull_socket.connect(sid_pull_port)
+    speaker_ids = {0: "Assistant", -1: "Unknown speaker"}
+    # segment_id: {"id": int, "content": str, "finished": bool}
+    intermediate_result = defaultdict(
+        lambda: {"id": speaker_ids[-1], "content": "", "finished": False}
+    )
+    result_queue = asyncio.Queue()
     logger.info(f"App ports: {byte_push_port}, {asr_pull_port}, {sid_pull_port}")
 
     # Message passing pipeline
-    # Push raw bytes -> VAD
-    async def task_recv_pcm():
+    # Send raw bytes -> VAD
+    async def task_send_pcm():
         while True:
             pcm_bytes = await websocket.receive_bytes()
             if not pcm_bytes:
@@ -53,7 +62,12 @@ async def websocket_asr(
             asr_result: ASRResult = await asr_pull_socket.recv_pyobj()
             if not asr_result:
                 return
-            await websocket.send_json(asr_result.to_dict())
+            intermediate_result[asr_result.idx]["content"].append(asr_result.text)
+            intermediate_result[asr_result.idx]["finished"] = asr_result.finished
+            if intermediate_result[asr_result.idx]["finished"]:
+                result_queue.put_nowait(intermediate_result[asr_result.idx]["finished"])
+                del intermediate_result[asr_result.idx]
+            # await websocket.send_json(asr_result.to_dict())
 
     # Receive results from SID
     async def task_recv_sid():
@@ -61,10 +75,22 @@ async def websocket_asr(
             sid_result: dict = await sid_pull_socket.recv_pyobj()
             if not sid_result:
                 return
-            await websocket.send_json(sid_result)
+            intermediate_result[sid_result.idx]["id"] = sid_result["name"]
+            if intermediate_result[sid_result.idx]["finished"]:
+                result_queue.put_nowait(intermediate_result[sid_result.idx]["finished"])
+                del intermediate_result[sid_result.idx]
+            # await websocket.send_json(sid_result)
+
+    # Send result
+    async def task_send_result():
+        while True:
+            result = await result_queue.get()
+            await websocket.send_json(result)
 
     try:
-        await asyncio.gather(task_recv_pcm(), task_recv_asr(), task_recv_sid())
+        await asyncio.gather(
+            task_send_pcm(), task_recv_asr(), task_recv_sid(), task_send_result()
+        )
     except WebSocketDisconnect:
         logger.info("asr: disconnected")
     finally:

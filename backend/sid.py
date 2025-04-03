@@ -68,7 +68,7 @@ class SIDStream:
                 self.num_speakers += 1
             else:
                 logger.info(f"{segment_id}: Detected existing speaker: {name}")
-            await self.push_socket.send_pyobj({"segment_id": segment_id, "name": name})
+            await self.push_socket.send_pyobj({"idx": segment_id, "name": name})
             duration = time.time() - st
             logger.info(f"{segment_id}: SID ({duration:.2f}s)")
             st = None
