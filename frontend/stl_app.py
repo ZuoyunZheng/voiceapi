@@ -6,13 +6,16 @@ import pyaudio
 import websockets.sync.client
 from websockets.exceptions import ConnectionClosed
 from queue import Queue
+import logging
 
 # Audio parameters
 CHUNK = 1024
 FORMAT = pyaudio.paInt16
 CHANNELS = 1
 RATE = 16000  # Common sample rate for ASR
-message_queue = Queue()
+message_queue = Queue()  # thread-safe queue for multithreaded comm.
+
+logger = logging.getLogger(__file__)
 
 
 def initialize_session_state(docker):
@@ -44,12 +47,10 @@ def process_audio_and_send(websocket):
 
     try:
         while True:
-            try:
-                data = stream.read(CHUNK, exception_on_overflow=False)
-                websocket.send(data)
-            except Exception as e:
-                message_queue.put(f"Error sending audio: {str(e)}")
-                break
+            data = stream.read(CHUNK, exception_on_overflow=False)
+            websocket.send(data)
+    except Exception as e:
+        logger.error(f"Error sending audio: {str(e)}")
     finally:
         stream.stop_stream()
         stream.close()
@@ -67,7 +68,7 @@ def receive_asr_results(websocket):
         except ConnectionClosed:
             break
         except Exception as e:
-            message_queue.put(f"Error receiving result: {str(e)}")
+            logger.error(f"Error receiving result: {str(e)}")
             break
 
 
@@ -173,32 +174,41 @@ def main(args):
     if st.button("Refresh Messages", key="refresh_button"):
         # This button doesn't need to do anything special
         # The rerun triggered by clicking it will refresh the messages
-        for _ in range(100):
-            if message_queue.empty():
-                print("Empty message queue")
-                break
+        while not message_queue.empty():
             message = message_queue.get()
-            print(message)
             st.session_state["messages"].append(message)
             message_queue.task_done()
     # Display message count
     st.text(f"Total messages: {len(st.session_state['messages'])}")
 
+    for message in st.session_state["messages"]:
+        # Display ASR messages
+        logger.info(message)
+        with st.chat_message(message["id"]):
+            st.write(message["content"])
+    import time
+
+    time.sleep(5)
+    st.rerun()
     # Messages container
-    message_container = st.container()
-    with message_container:
-        for i, msg in enumerate(
-            st.session_state["messages"][-10:]
-        ):  # Show last 10 messages
-            st.text(f"Message {i + 1}:")
-            try:
-                st.json(msg)
-            except SyntaxError:
-                st.text(msg)
+    # message_container = st.container()
+    # with message_container:
+    #     for i, msg in enumerate(
+    #         st.session_state["messages"][-10:]
+    #     ):  # Show last 10 messages
+    #         st.text(f"Message {i + 1}:")
+    #         try:
+    #             st.json(msg)
+    #         except SyntaxError:
+    #             st.text(msg)
 
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser(description="ASR WebSocket Client")
     argparser.add_argument("--docker", action="store_true")
     args = argparser.parse_args()
+    logging.basicConfig(
+        format="%(levelname)s: %(asctime)s %(name)s:%(lineno)s %(message)s",
+        level=logging.INFO,
+    )
     main(args)

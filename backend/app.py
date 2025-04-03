@@ -62,10 +62,11 @@ async def websocket_asr(
             asr_result: ASRResult = await asr_pull_socket.recv_pyobj()
             if not asr_result:
                 return
-            intermediate_result[asr_result.idx]["content"].append(asr_result.text)
+            intermediate_result[asr_result.idx]["content"] += asr_result.text
             intermediate_result[asr_result.idx]["finished"] = asr_result.finished
             if intermediate_result[asr_result.idx]["finished"]:
-                result_queue.put_nowait(intermediate_result[asr_result.idx]["finished"])
+                del intermediate_result[asr_result.idx]["finished"]
+                result_queue.put_nowait(intermediate_result[asr_result.idx])
                 del intermediate_result[asr_result.idx]
             # await websocket.send_json(asr_result.to_dict())
 
@@ -77,7 +78,8 @@ async def websocket_asr(
                 return
             intermediate_result[sid_result.idx]["id"] = sid_result["name"]
             if intermediate_result[sid_result.idx]["finished"]:
-                result_queue.put_nowait(intermediate_result[sid_result.idx]["finished"])
+                del intermediate_result[sid_result.idx]["finished"]
+                result_queue.put_nowait(intermediate_result[sid_result.idx])
                 del intermediate_result[sid_result.idx]
             # await websocket.send_json(sid_result)
 
