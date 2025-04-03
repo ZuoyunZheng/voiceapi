@@ -1738,6 +1738,7 @@ frontend = [
     { name = "gradio" },
     { name = "pyaudio" },
     { name = "streamlit" },
+    { name = "websockets" },
 ]
 sherpa = [
     { name = "onnxruntime-gpu" },
@@ -1762,6 +1763,7 @@ requires-dist = [
     { name = "streamlit", marker = "extra == 'frontend'", specifier = "==1.43.2" },
     { name = "uvicorn", marker = "extra == 'fastapi'", specifier = "==0.30.6" },
     { name = "websockets", marker = "extra == 'fastapi'", specifier = "==15.0.1" },
+    { name = "websockets", marker = "extra == 'frontend'", specifier = "==15.0.1" },
 ]
 
 [[package]]

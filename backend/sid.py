@@ -1,4 +1,4 @@
-from typing import Union, Tuple, List
+from typing import Tuple
 import logging
 import time
 import sherpa_onnx
@@ -16,7 +16,9 @@ _asr_engines = dict()
 class SIDStream:
     def __init__(
         self,
-        model: Tuple[sherpa_onnx.SpeakerEmbeddingExtractor, sherpa_onnx.SpeakerEmbeddingManager],
+        model: Tuple[
+            sherpa_onnx.SpeakerEmbeddingExtractor, sherpa_onnx.SpeakerEmbeddingManager
+        ],
         sample_rate: int,
         push_port: str,
         pull_port: str,
@@ -33,7 +35,7 @@ class SIDStream:
         self.push_socket.bind(push_port)
         self.pull_socket = self.context.socket(zmq.PULL)
         self.pull_socket.connect(pull_port)
-        
+
     async def start(self):
         if self.online:
             asyncio.create_task(self.run_online())
@@ -62,10 +64,8 @@ class SIDStream:
                 status = sid_manager.add(name, embedding)
                 if not status:
                     raise RuntimeError(f"Failed to register speaker {name}")
-                logger.info(
-                    f"{segment_id}: Detected new speaker. Registered as {name}"
-                )
-                self.num_speakers+= 1
+                logger.info(f"{segment_id}: Detected new speaker. Registered as {name}")
+                self.num_speakers += 1
             else:
                 logger.info(f"{segment_id}: Detected existing speaker: {name}")
             await self.push_socket.send_pyobj({"segment_id": segment_id, "name": name})
@@ -76,6 +76,7 @@ class SIDStream:
     async def close(self):
         self.push_socket.close()
         self.pull_socket.close()
+
 
 def load_sid_engine(
     sample_rate: int,
@@ -102,9 +103,15 @@ async def start_sid_stream(args) -> SIDStream:
     """
     Start a SID stream
     """
-    stream = SIDStream(load_sid_engine(args.sample_rate, args.model_dir, args.provider, args.threads), args.sample_rate, args.push_port, args.pull_port)
+    stream = SIDStream(
+        load_sid_engine(args.sample_rate, args.model_dir, args.provider, args.threads),
+        args.sample_rate,
+        args.push_port,
+        args.pull_port,
+    )
     await stream.start()
     return stream
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Start the SID stream.")

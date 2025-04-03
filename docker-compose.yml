@@ -1,6 +1,23 @@
 name: voiceapi
 services:
   # Frontend
+  streamlit:
+    build:
+      context: .
+      dockerfile: frontend/docker/Dockerfile.streamlit
+    ports:
+      - "8501:8501"
+    devices:
+      - /dev/snd:/dev/snd
+    # volumes:
+    #   - /dev/shm:/dev/shm
+    environment:
+      - ALSA_CARD=Generic_1
+    # group_add:
+    #   - audio
+    depends_on:
+      - app
+
   # Backend
   app:
     build:
@@ -11,6 +28,7 @@ services:
     depends_on: # TODO: check dependency
       - vad
       - asr
+      - sid
 
   vad:
     build:
@@ -21,9 +39,6 @@ services:
     environment:
       - PUSH_PORT=tcp://*:8002
       - PULL_PORT=tcp://app:8001
-    # ports:
-    #   - "8001:8001"
-    #   - "8002:8002"
     command: uv run backend/vad.py --docker
 
   asr:
@@ -35,9 +50,6 @@ services:
     environment:
       - PUSH_PORT=tcp://*:8003
       - PULL_PORT=tcp://vad:8002
-    # ports:
-    #   - "8002:8002"
-    #   - "8003:8003"
     command: uv run backend/asr.py --docker
 
   sid:
@@ -49,9 +61,6 @@ services:
     environment:
       - PUSH_PORT=tcp://*:8004
       - PULL_PORT=tcp://vad:8002
-    # ports:
-    #   - "8002:8002"
-    #   - "8004:8004"
     command: uv run backend/sid.py --docker
 
 networks:

@@ -1,5 +1,5 @@
 import argparse
-from typing import Union, Tuple
+from typing import Union
 import logging
 import time
 import sherpa_onnx
@@ -11,7 +11,6 @@ from utils import ASRResult
 
 logger = logging.getLogger(__file__)
 _asr_engines = dict()
-
 
 
 class ASRStream:

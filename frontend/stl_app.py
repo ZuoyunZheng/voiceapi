@@ -1,6 +1,7 @@
 import streamlit as st
 import threading
 import json
+import argparse
 import pyaudio
 import websockets.sync.client
 from websockets.exceptions import ConnectionClosed
@@ -14,7 +15,7 @@ RATE = 16000  # Common sample rate for ASR
 message_queue = Queue()
 
 
-def initialize_session_state():
+def initialize_session_state(docker):
     global message_queue
     """Initialize the session state with default values"""
     if "connection_status" not in st.session_state:
@@ -25,7 +26,10 @@ def initialize_session_state():
     else:
         message_queue = st.session_state["message_queue"]
     if "websocket_uri" not in st.session_state:
-        st.session_state["websocket_uri"] = "ws://127.0.0.1:8000/asr"
+        if docker:
+            st.session_state["websocket_uri"] = "ws://app:8000/asr"
+        else:
+            st.session_state["websocket_uri"] = "ws://127.0.0.1:8000/asr"
     if "thread_started" not in st.session_state:
         st.session_state["thread_started"] = False
 
@@ -132,9 +136,9 @@ def toggle_connection():
         stop_websocket_connection()
 
 
-def main():
+def main(args):
     # Initialize session state
-    initialize_session_state()
+    initialize_session_state(args.docker)
 
     st.title("ASR WebSocket Client")
 
@@ -189,9 +193,12 @@ def main():
             st.text(f"Message {i + 1}:")
             try:
                 st.json(msg)
-            except SyntaxError as e:
+            except SyntaxError:
                 st.text(msg)
 
 
 if __name__ == "__main__":
-    main()
+    argparser = argparse.ArgumentParser(description="ASR WebSocket Client")
+    argparser.add_argument("--docker", action="store_true")
+    args = argparser.parse_args()
+    main(args)

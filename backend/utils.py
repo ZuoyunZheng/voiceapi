@@ -6,4 +6,3 @@ class ASRResult:
 
     def to_dict(self):
         return {"text": self.text, "finished": self.finished, "idx": self.idx}
-
