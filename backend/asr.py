@@ -30,8 +30,9 @@ class ASRStream:
         self.context = zmq.asyncio.Context()
         self.push_socket = self.context.socket(zmq.PUSH)
         self.push_socket.bind(push_port)
-        self.pull_socket = self.context.socket(zmq.PULL)
+        self.pull_socket = self.context.socket(zmq.SUB)
         self.pull_socket.connect(pull_port)
+        self.pull_socket.setsockopt_string(zmq.SUBSCRIBE, "")
 
     async def start(self):
         if self.online:
@@ -67,20 +68,20 @@ class ASRStream:
                 self.model.reset(stream)
 
     async def run_offline(self):
+        asr_stream = self.model.create_stream()
         st = None
         while True:
             segment_id, samples = await self.pull_socket.recv_pyobj()
+            logger.info(f"{segment_id}: ASR start")
             if not st:
                 st = time.time()
-            asr_stream = self.model.create_stream()
             asr_stream.accept_waveform(self.sample_rate, samples)
 
             self.model.decode_stream(asr_stream)
             result = asr_stream.result.text.strip()
-            if result:
-                duration = time.time() - st
-                logger.info(f"{segment_id}:{result} ({duration:.2f}s)")
-                await self.push_socket.send_pyobj(ASRResult(result, True, segment_id))
+            duration = time.time() - st
+            logger.info(f"{segment_id}:{result} ({duration:.2f}s)")
+            await self.push_socket.send_pyobj(ASRResult(result, True, segment_id))
             st = None
 
     async def close(self):

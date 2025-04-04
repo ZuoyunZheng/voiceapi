@@ -28,12 +28,13 @@ class VADStream:
         self.online = False
         # ZeroMQ context
         self.context = zmq.asyncio.Context()
-        self.push_socket = self.context.socket(zmq.PUSH)
+        self.push_socket = self.context.socket(zmq.PUB)
         self.push_socket.bind(push_port)
         self.pull_socket = self.context.socket(zmq.PULL)
         self.pull_socket.connect(pull_port)
 
     async def start(self):
+        await self.push_socket.send_pyobj("")
         if self.online:
             asyncio.create_task(self.run_online())
         else:

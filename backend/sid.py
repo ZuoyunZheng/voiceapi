@@ -33,8 +33,9 @@ class SIDStream:
         self.context = zmq.asyncio.Context()
         self.push_socket = self.context.socket(zmq.PUSH)
         self.push_socket.bind(push_port)
-        self.pull_socket = self.context.socket(zmq.PULL)
+        self.pull_socket = self.context.socket(zmq.SUB)
         self.pull_socket.connect(pull_port)
+        self.pull_socket.setsockopt_string(zmq.SUBSCRIBE, "")
 
     async def start(self):
         if self.online:
@@ -47,12 +48,13 @@ class SIDStream:
 
     async def run_offline(self):
         sid, sid_manager = self.model
+        sid_stream = sid.create_stream()
         st = None
         while True:
             segment_id, samples = await self.pull_socket.recv_pyobj()
+            logger.info(f"{segment_id}: SID start")
             if not st:
                 st = time.time()
-            sid_stream = sid.create_stream()
             sid_stream.accept_waveform(self.sample_rate, samples)
 
             embedding = sid.compute(sid_stream)

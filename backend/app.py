@@ -76,11 +76,11 @@ async def websocket_asr(
             sid_result: dict = await sid_pull_socket.recv_pyobj()
             if not sid_result:
                 return
-            intermediate_result[sid_result.idx]["id"] = sid_result["name"]
-            if intermediate_result[sid_result.idx]["finished"]:
-                del intermediate_result[sid_result.idx]["finished"]
-                result_queue.put_nowait(intermediate_result[sid_result.idx])
-                del intermediate_result[sid_result.idx]
+            intermediate_result[sid_result["idx"]]["id"] = sid_result["name"]
+            if intermediate_result[sid_result["idx"]]["finished"]:
+                del intermediate_result[sid_result["idx"]]["finished"]
+                result_queue.put_nowait(intermediate_result[sid_result["idx"]])
+                del intermediate_result[sid_result["idx"]]
             # await websocket.send_json(sid_result)
 
     # Send result
@@ -115,7 +115,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     # TODO: make arg parsing better designed
     if args.docker:
-        args.addr, vad_address, asr_address = "0.0.0.0", "*", "asr"
+        args.addr, vad_address, asr_address, sid_address = "0.0.0.0", "*", "asr", "sid"
 
     logging.basicConfig(
         format="%(levelname)s: %(asctime)s %(name)s:%(lineno)s %(message)s",
