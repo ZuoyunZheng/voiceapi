@@ -68,10 +68,10 @@ class ASRStream:
                 self.model.reset(stream)
 
     async def run_offline(self):
-        asr_stream = self.model.create_stream()
         st = None
         while True:
             segment_id, samples = await self.pull_socket.recv_pyobj()
+            asr_stream = self.model.create_stream()
             logger.info(f"{segment_id}: ASR start")
             if not st:
                 st = time.time()
@@ -79,9 +79,9 @@ class ASRStream:
 
             self.model.decode_stream(asr_stream)
             result = asr_stream.result.text.strip()
+            await self.push_socket.send_pyobj(ASRResult(result, True, segment_id))
             duration = time.time() - st
             logger.info(f"{segment_id}:{result} ({duration:.2f}s)")
-            await self.push_socket.send_pyobj(ASRResult(result, True, segment_id))
             st = None
 
     async def close(self):

@@ -39,9 +39,14 @@ async def websocket_asr(
     sid_pull_socket = context.socket(zmq.PULL)
     sid_pull_socket.connect(sid_pull_port)
     speaker_ids = {0: "Assistant", -1: "Unknown speaker"}
-    # segment_id: {"id": int, "content": str, "finished": bool}
+    # segment_id: {"id": str, "content": str, "finished": bool}
     intermediate_result = defaultdict(
-        lambda: {"id": speaker_ids[-1], "content": "", "finished": False}
+        lambda: {
+            "id": speaker_ids[-1],
+            "content": "",
+            "sid_finished": False,
+            "asr_finished": False,
+        }
     )
     result_queue = asyncio.Queue()
     logger.info(f"App ports: {byte_push_port}, {asr_pull_port}, {sid_pull_port}")
@@ -60,27 +65,36 @@ async def websocket_asr(
     async def task_recv_asr():
         while True:
             asr_result: ASRResult = await asr_pull_socket.recv_pyobj()
+            logger.info(f"Received ASR results for segment {asr_result.idx}")
             if not asr_result:
                 return
-            intermediate_result[asr_result.idx]["content"] += asr_result.text
-            intermediate_result[asr_result.idx]["finished"] = asr_result.finished
-            if intermediate_result[asr_result.idx]["finished"]:
-                del intermediate_result[asr_result.idx]["finished"]
+            ir = intermediate_result[asr_result.idx]
+            ir["content"] += asr_result.text
+            ir["asr_finished"] = asr_result.finished
+            if ir["asr_finished"] and ir["sid_finished"]:
+                del ir["asr_finished"]
+                del ir["sid_finished"]
                 result_queue.put_nowait(intermediate_result[asr_result.idx])
-                del intermediate_result[asr_result.idx]
+                logger.info(f"Enqueued results for segment {asr_result.idx}")
+                del ir
             # await websocket.send_json(asr_result.to_dict())
 
     # Receive results from SID
     async def task_recv_sid():
         while True:
             sid_result: dict = await sid_pull_socket.recv_pyobj()
+            logger.info(f"Received SID results for segment {sid_result['idx']}")
             if not sid_result:
                 return
-            intermediate_result[sid_result["idx"]]["id"] = sid_result["name"]
-            if intermediate_result[sid_result["idx"]]["finished"]:
-                del intermediate_result[sid_result["idx"]]["finished"]
+            ir = intermediate_result[sid_result["idx"]]
+            ir["id"] = sid_result["name"]
+            ir["sid_finished"] = sid_result["finished"]
+            if ir["asr_finished"] and ir["sid_finished"]:
+                del ir["asr_finished"]
+                del ir["sid_finished"]
                 result_queue.put_nowait(intermediate_result[sid_result["idx"]])
-                del intermediate_result[sid_result["idx"]]
+                logger.info(f"Enqueued results for segment {sid_result['idx']}")
+                del ir
             # await websocket.send_json(sid_result)
 
     # Send result

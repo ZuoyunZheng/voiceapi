@@ -54,10 +54,10 @@ class VADStream:
                 if not st:
                     st = time.time()
                 await self.push_socket.send_pyobj((segment_id, vad.front.samples))
-                duration = time.time() - st
-                logger.info(f"{segment_id}: VAD ({duration:.2f}s)")
                 vad.pop()
                 segment_id += 1
+                duration = time.time() - st
+                logger.info(f"{segment_id}: VAD ({duration:.2f}s)")
             st = None
 
     async def close(self):

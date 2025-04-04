@@ -27,7 +27,7 @@ class SIDStream:
         self.push_port = push_port
         self.pull_port = pull_port
         self.sample_rate = sample_rate
-        self.num_speakers = 0
+        self.num_speakers = 1  # 0 reserved for assistant agent
         self.online = False
         # ZeroMQ context
         self.context = zmq.asyncio.Context()
@@ -48,10 +48,10 @@ class SIDStream:
 
     async def run_offline(self):
         sid, sid_manager = self.model
-        sid_stream = sid.create_stream()
         st = None
         while True:
             segment_id, samples = await self.pull_socket.recv_pyobj()
+            sid_stream = sid.create_stream()
             logger.info(f"{segment_id}: SID start")
             if not st:
                 st = time.time()
@@ -70,9 +70,11 @@ class SIDStream:
                 self.num_speakers += 1
             else:
                 logger.info(f"{segment_id}: Detected existing speaker: {name}")
-            await self.push_socket.send_pyobj({"idx": segment_id, "name": name})
+            await self.push_socket.send_pyobj(
+                {"idx": segment_id, "name": name, "finished": True}
+            )
             duration = time.time() - st
-            logger.info(f"{segment_id}: SID ({duration:.2f}s)")
+            logger.info(f"{segment_id}: {name} ({duration:.2f}s)")
             st = None
 
     async def close(self):
