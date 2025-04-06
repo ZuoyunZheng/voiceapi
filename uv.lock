@@ -1721,6 +1721,7 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "numpy" },
+    { name = "pydub" },
 ]
 
 [package.optional-dependencies]
@@ -1755,6 +1756,7 @@ requires-dist = [
     { name = "onnxruntime-gpu", marker = "extra == 'sherpa'", specifier = "==1.19.2" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = "==4.1.0" },
     { name = "pyaudio", marker = "extra == 'frontend'", specifier = "==0.2.14" },
+    { name = "pydub", specifier = ">=0.25.1" },
     { name = "pyzmq", marker = "extra == 'fastapi'", specifier = "==26.3.0" },
     { name = "pyzmq", marker = "extra == 'sherpa'", specifier = "==26.3.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = "==0.11.0" },

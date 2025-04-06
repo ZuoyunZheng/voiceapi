@@ -7,12 +7,15 @@ import websockets.sync.client
 from websockets.exceptions import ConnectionClosed
 from queue import Queue
 import logging
+from pydub import AudioSegment
+import io
+
 import time
 
 
 # Audio parameters
 CHUNK = 1024
-FORMAT = pyaudio.paInt16
+FORMAT, WIDTH = pyaudio.paInt16, 2  # 16-bit is 2 bytes
 CHANNELS = 1
 RATE = 16000  # Common sample rate for ASR
 message_queue = Queue()  # thread-safe queue for multithreaded comm.
@@ -39,24 +42,51 @@ def initialize_session_state(docker):
         st.session_state["thread_started"] = False
 
 
-def process_audio_and_send(websocket):
+def process_audio_and_send(websocket, file):
     """Capture audio from microphone and send over websocket"""
-    p = pyaudio.PyAudio()
+    if file:
+        # Load the MP3 file directly from the BytesIO object
+        sound = AudioSegment.from_file(file, format="mp3")
+        sound = sound.set_frame_rate(RATE)
+        sound = sound.set_channels(CHANNELS)
+        sound = sound.set_sample_width(WIDTH)
+        raw_data = sound.raw_data
+        buffer = io.BytesIO(raw_data)
 
-    stream = p.open(
-        format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK
-    )
+        def stream():
+            """Generator function that yields chunks of audio data"""
+            chunk_size = CHUNK * WIDTH
+            while True:
+                chunk = buffer.read(chunk_size)
+                if not chunk:
+                    break
+                yield chunk
+                # time.sleep(0.064)  # ~64ms per chunk at 16kHz to simulate real-time
 
-    try:
-        while True:
-            data = stream.read(CHUNK, exception_on_overflow=False)
-            websocket.send(data)
-    except Exception as e:
-        logger.error(f"Error sending audio: {str(e)}")
-    finally:
-        stream.stop_stream()
-        stream.close()
-        p.terminate()
+        try:
+            for data in stream():
+                websocket.send(data)
+        except Exception as e:
+            logger.error(f"Error streaming file: {str(e)}")
+    else:
+        p = pyaudio.PyAudio()
+        stream = p.open(
+            format=FORMAT,
+            channels=CHANNELS,
+            rate=RATE,
+            input=True,
+            frames_per_buffer=CHUNK,
+        )
+        try:
+            while True:
+                data = stream.read(CHUNK, exception_on_overflow=False)
+                websocket.send(data)
+        except Exception as e:
+            logger.error(f"Error streaming audio: {str(e)}")
+        finally:
+            stream.stop_stream()
+            stream.close()
+            p.terminate()
 
 
 def receive_asr_results(websocket):
@@ -74,7 +104,7 @@ def receive_asr_results(websocket):
             break
 
 
-def start_websocket_connection():
+def start_websocket_connection(file):
     """Start a new WebSocket connection if not already connected"""
     if (
         st.session_state["connection_status"] == "Connected"
@@ -91,7 +121,7 @@ def start_websocket_connection():
 
         # Start sender thread
         sender_thread = threading.Thread(
-            target=process_audio_and_send, args=(websocket,), daemon=True
+            target=process_audio_and_send, args=(websocket, file), daemon=True
         )
 
         # Start receiver thread
@@ -131,10 +161,10 @@ def stop_websocket_connection():
         st.session_state["thread_started"] = False
 
 
-def toggle_connection():
+def toggle_connection(file):
     """Toggle connection state"""
     if st.session_state["connection_status"] == "Disconnected":
-        start_websocket_connection()
+        start_websocket_connection(file)
     else:
         stop_websocket_connection()
 
@@ -151,6 +181,9 @@ def main(args):
     )
     st.session_state["websocket_uri"] = websocket_uri
 
+    # Audio File Upload
+    file = st.file_uploader("Upload audio file")
+
     # Connection control button
     button_label = (
         "Connect"
@@ -158,7 +191,7 @@ def main(args):
         else "Disconnect"
     )
     if st.button(button_label, key="toggle_button"):
-        toggle_connection()
+        toggle_connection(file)
 
     # Display connection status
     status_color = (
