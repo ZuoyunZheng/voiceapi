@@ -7,6 +7,8 @@ import websockets.sync.client
 from websockets.exceptions import ConnectionClosed
 from queue import Queue
 import logging
+import time
+
 
 # Audio parameters
 CHUNK = 1024
@@ -170,14 +172,10 @@ def main(args):
     # Display ASR messages with refresh button
     st.subheader("ASR Results:")
 
-    # Add refresh button for messages
-    if st.button("Refresh Messages", key="refresh_button"):
-        # This button doesn't need to do anything special
-        # The rerun triggered by clicking it will refresh the messages
-        while not message_queue.empty():
-            message = message_queue.get()
-            st.session_state["messages"].append(message)
-            message_queue.task_done()
+    # # Add refresh button for messages
+    # if st.button("Refresh Messages", key="refresh_button"):
+    #     # This button doesn't need to do anything special
+
     # Display message count
     st.text(f"Total messages: {len(st.session_state['messages'])}")
 
@@ -186,21 +184,17 @@ def main(args):
         logger.info(message)
         with st.chat_message(message["id"]):
             st.write(message["content"])
-    import time
 
-    time.sleep(5)
-    st.rerun()
-    # Messages container
-    # message_container = st.container()
-    # with message_container:
-    #     for i, msg in enumerate(
-    #         st.session_state["messages"][-10:]
-    #     ):  # Show last 10 messages
-    #         st.text(f"Message {i + 1}:")
-    #         try:
-    #             st.json(msg)
-    #         except SyntaxError:
-    #             st.text(msg)
+    # Poll for new messages
+    while True:
+        if message_queue:
+            while not message_queue.empty():
+                message = message_queue.get()
+                st.session_state["messages"].append(message)
+                message_queue.task_done()
+                st.rerun()
+        else:
+            time.sleep(4)
 
 
 if __name__ == "__main__":
