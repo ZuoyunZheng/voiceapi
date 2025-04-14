@@ -71,7 +71,7 @@ def load_vad_engine(
     provider: str,
     threads: int,
     # min_silence_duration: float = 0.25,
-    min_silence_duration: float = 0.1,
+    min_silence_duration: float = 0.01,
     buffer_size_in_seconds: int = 100,
 ) -> sherpa_onnx.VoiceActivityDetector:
     st = time.time()

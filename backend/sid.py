@@ -59,10 +59,11 @@ class SIDStream:
 
             embedding = sid.compute(sid_stream)
             embedding = np.array(embedding)
-            name = sid_manager.search(embedding, threshold=0.4)
+            # name = sid_manager.search(embedding, threshold=0.4)
+            name = sid_manager.search(embedding, threshold=0.5)
             if not name:
                 # register it
-                name = f"speaker_{self.num_speakers}"
+                name = f"{self.num_speakers}"
                 status = sid_manager.add(name, embedding)
                 if not status:
                     raise RuntimeError(f"Failed to register speaker {name}")

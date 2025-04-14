@@ -8,5 +8,26 @@ WORKDIR /app
 RUN uv venv --python 3.10
 COPY pyproject.toml uv.lock ./
 RUN uv sync --extra sherpa
-RUN uv pip install sherpa-onnx==1.10.27+cuda -f https://k2-fsa.github.io/sherpa/onnx/cuda.html
-COPY backend ./backend
+
+#RUN uv pip install sherpa-onnx==1.10.27+cuda -f https://k2-fsa.github.io/sherpa/onnx/cuda.html
+RUN apt-get install -y git cmake
+RUN git clone https://github.com/k2-fsa/sherpa-onnx /sherpa-onnx
+WORKDIR /sherpa-onnx
+RUN sed -i '/Optimization/c\sess_opts.SetGraphOptimizationLevel(ORT_DISABLE_ALL);' sherpa-onnx/csrc/session.cc
+RUN mkdir build
+WORKDIR /sherpa-onnx/build
+RUN cmake \
+  -DPYTHON_EXECUTABLE:FILEPATH=/app/.venv/bin/python3.10 \
+  -DSHERPA_ONNX_ENABLE_PYTHON=ON \
+  -DBUILD_SHARED_LIBS=ON \
+  -DSHERPA_ONNX_ENABLE_CHECK=OFF \
+  -DSHERPA_ONNX_ENABLE_PORTAUDIO=OFF \
+  -DSHERPA_ONNX_ENABLE_C_API=OFF \
+  -DSHERPA_ONNX_ENABLE_WEBSOCKET=OFF \
+  -DSHERPA_ONNX_ENABLE_GPU=ON \
+  ..
+RUN make -j 1
+ENV PYTHONPATH="/sherpa-onnx/sherpa-onnx/python/:/sherpa-onnx/build/lib:$PYTHONPATH"
+WORKDIR /app
+
+COPY backend /app/backend
