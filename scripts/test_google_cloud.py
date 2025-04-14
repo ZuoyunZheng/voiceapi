@@ -1,3 +1,4 @@
+# Setup client cf. https://cloud.google.com/docs/authentication/set-up-adc-local-dev-environment
 from google.cloud import speech_v1p1beta1 as speech
 
 client = speech.SpeechClient()

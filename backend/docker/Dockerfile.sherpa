@@ -10,6 +10,10 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --extra sherpa
 
 #RUN uv pip install sherpa-onnx==1.10.27+cuda -f https://k2-fsa.github.io/sherpa/onnx/cuda.html
+# Disable graph optimization for onnxruntime on gpu
+# cf. https://github.com/microsoft/onnxruntime/issues/20276#issuecomment-2050143569
+# Graph Optimization Levels: https://onnxruntime.ai/docs/performance/model-optimizations/graph-optimizations.html#graph-optimization-levels
+# sherpa-onnx compile from source: https://k2-fsa.github.io/sherpa/onnx/python/install.html#method-4-for-developers
 RUN apt-get install -y git cmake
 RUN git clone https://github.com/k2-fsa/sherpa-onnx /sherpa-onnx
 WORKDIR /sherpa-onnx
