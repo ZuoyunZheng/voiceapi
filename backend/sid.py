@@ -52,15 +52,13 @@ class SIDStream:
         while True:
             segment_id, samples = await self.pull_socket.recv_pyobj()
             sid_stream = sid.create_stream()
-            logger.info(f"{segment_id}: SID start")
             if not st:
                 st = time.time()
             sid_stream.accept_waveform(self.sample_rate, samples)
 
             embedding = sid.compute(sid_stream)
             embedding = np.array(embedding)
-            # name = sid_manager.search(embedding, threshold=0.4)
-            name = sid_manager.search(embedding, threshold=0.5)
+            name = sid_manager.search(embedding, threshold=0.25)
             if not name:
                 # register it
                 name = f"{self.num_speakers}"
@@ -89,6 +87,7 @@ def load_sid_engine(
     provider: str,
     threads: int,
 ) -> Tuple[sherpa_onnx.SpeakerEmbeddingExtractor, sherpa_onnx.SpeakerEmbeddingManager]:
+    st = time.time()
     d = os.path.join(
         model_dir, "3dspeaker_speech_eres2net_large_sv_zh-cn_3dspeaker_16k.onnx"
     )
@@ -101,6 +100,7 @@ def load_sid_engine(
     if not config.validate():
         raise ValueError(f"Invalid config. {config}")
     sid = sherpa_onnx.SpeakerEmbeddingExtractor(config)
+    logger.info(f"SID engine loaded in {time.time() - st:.2f}s")
     return (sid, sherpa_onnx.SpeakerEmbeddingManager(sid.dim))
 
 

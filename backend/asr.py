@@ -72,7 +72,6 @@ class ASRStream:
         while True:
             segment_id, samples = await self.pull_socket.recv_pyobj()
             asr_stream = self.model.create_stream()
-            logger.info(f"{segment_id}: ASR start")
             if not st:
                 st = time.time()
             asr_stream.accept_waveform(self.sample_rate, samples)

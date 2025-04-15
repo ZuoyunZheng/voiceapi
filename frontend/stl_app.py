@@ -91,12 +91,14 @@ def process_audio_and_send(websocket, file):
 
 def receive_asr_results(websocket):
     """Receive ASR results from websocket"""
+    segment_id = 0
     while True:
         try:
             result = websocket.recv()
             asr_result = json.loads(result)
-            print(asr_result)
+            logger.info(f"(STL receiver thread) {segment_id}: {asr_result}")
             message_queue.put(asr_result)
+            segment_id += 1
         except ConnectionClosed:
             break
         except Exception as e:
@@ -214,7 +216,6 @@ def main(args):
 
     for message in st.session_state["messages"]:
         # Display ASR messages
-        logger.info(message)
         with st.chat_message(message["id"]):
             st.write(message["content"])
 
@@ -223,11 +224,10 @@ def main(args):
         if message_queue:
             while not message_queue.empty():
                 message = message_queue.get()
+                logger.info(message)
                 st.session_state["messages"].append(message)
                 message_queue.task_done()
                 st.rerun()
-        else:
-            time.sleep(4)
 
 
 if __name__ == "__main__":
