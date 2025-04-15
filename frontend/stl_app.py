@@ -24,15 +24,18 @@ logger = logging.getLogger(__file__)
 
 
 def initialize_session_state(docker):
-    global message_queue
     """Initialize the session state with default values"""
+    global message_queue
     if "connection_status" not in st.session_state:
         st.session_state["connection_status"] = "Disconnected"
     if "messages" not in st.session_state:
         st.session_state["message_queue"] = message_queue
         st.session_state["messages"] = []
+        message_queue = st.session_state["message_queue"]
+        logger.info(f"NEW RUN: {len(st.session_state['messages'])} messages so far...")
     else:
         message_queue = st.session_state["message_queue"]
+        logger.info(f"RERUN: {len(st.session_state['messages'])} messages so far...")
     if "websocket_uri" not in st.session_state:
         if docker:
             st.session_state["websocket_uri"] = "ws://app:8000/asr"
@@ -96,8 +99,8 @@ def receive_asr_results(websocket):
         try:
             result = websocket.recv()
             asr_result = json.loads(result)
-            logger.info(f"(STL receiver thread) {segment_id}: {asr_result}")
             message_queue.put(asr_result)
+            logger.info(f"STL recv thread {segment_id}: {asr_result}")
             segment_id += 1
         except ConnectionClosed:
             break
@@ -142,7 +145,6 @@ def start_websocket_connection(file):
 
     except Exception as e:
         st.session_state["connection_status"] = "Disconnected"
-        st.session_state["messages"].append(f"Connection error: {str(e)}")
         print(f"Connection error: {str(e)}")
 
 
@@ -207,10 +209,6 @@ def main(args):
     # Display ASR messages with refresh button
     st.subheader("ASR Results:")
 
-    # # Add refresh button for messages
-    # if st.button("Refresh Messages", key="refresh_button"):
-    #     # This button doesn't need to do anything special
-
     # Display message count
     st.text(f"Total messages: {len(st.session_state['messages'])}")
 
@@ -220,14 +218,15 @@ def main(args):
             st.write(message["content"])
 
     # Poll for new messages
-    while True:
-        if message_queue:
-            while not message_queue.empty():
-                message = message_queue.get()
-                logger.info(message)
-                st.session_state["messages"].append(message)
-                message_queue.task_done()
-                st.rerun()
+    if not message_queue.empty():
+        while not message_queue.empty():
+            message = message_queue.get()
+            st.session_state["messages"].append(message)
+            logger.info(f"STL main thread {len(st.session_state['messages'])-1}: {message}")
+    else:
+        time.sleep(1)
+    st.rerun()
+
 
 
 if __name__ == "__main__":
