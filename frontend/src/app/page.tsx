@@ -8,7 +8,7 @@ const ws = new WebSocket('ws://localhost:8000/asr');
 export default function Home() {
   const [messages, setMessages] = useState([]);
   const [recorder, setRecorder] = useState(null);
-  const audioContextRef = useRef(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
