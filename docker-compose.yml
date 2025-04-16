@@ -3,8 +3,8 @@ services:
   # Frontend
   frontend:
     build:
-      context: ./frontend
-      dockerfile: docker/Dockerfile
+      context: .
+      dockerfile: frontend/docker/Dockerfile
     ports:
       - "8501:3000"
     devices:
@@ -32,7 +32,7 @@ services:
 
   vad:
     build:
-      context: ./frontend
+      context: .
       dockerfile: backend/docker/Dockerfile.sherpa
     runtime: nvidia
     volumes:
@@ -44,7 +44,7 @@ services:
 
   asr:
     build:
-      context: ./frontend
+      context: .
       dockerfile: backend/docker/Dockerfile.sherpa
     runtime: nvidia
     volumes:
@@ -56,7 +56,7 @@ services:
 
   sid:
     build:
-      context: ./frontend
+      context: .
       dockerfile: backend/docker/Dockerfile.sherpa
     runtime: nvidia
     volumes:
