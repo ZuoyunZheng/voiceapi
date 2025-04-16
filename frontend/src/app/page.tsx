@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 
-const ws = new WebSocket('ws://localhost:8000/asr');
+const ws = new WebSocket('ws://app:8000/asr');
 
 export default function Home() {
   interface Message {
