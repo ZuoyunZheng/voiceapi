@@ -8,9 +8,7 @@ const nextConfig = {
     return config;
   },
   output: 'standalone',
-  server: {
-    host: '0.0.0.0',
-  },
+  
   compiler: {
     // Enables the styled-components SWC transform
     styledComponents: true
