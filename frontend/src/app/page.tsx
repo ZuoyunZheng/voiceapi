@@ -18,9 +18,7 @@ export default function Home() {
     async function initializeRecorder() {
       if (!audioContextRef.current) return;
       const rec = new Recorder(audioContextRef.current, {
-        onAnalysing: (data) => {
-          // Optional: Do something with the audio data for visualization
-        }
+        
       });
 
       setRecorder(rec);
