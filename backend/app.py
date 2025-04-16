@@ -65,7 +65,7 @@ async def websocket_asr(
     async def task_recv_asr():
         while True:
             asr_result: ASRResult = await asr_pull_socket.recv_pyobj()
-            #logger.info(f"Received ASR results for segment {asr_result.idx}")
+            # logger.info(f"Received ASR results for segment {asr_result.idx}")
             if not asr_result:
                 return
             ir = intermediate_result[asr_result.idx]
@@ -75,7 +75,9 @@ async def websocket_asr(
                 del ir["asr_finished"]
                 del ir["sid_finished"]
                 await result_queue.put(intermediate_result[asr_result.idx])
-                logger.info(f"Enqueued results for segment {asr_result.idx}: {ir['id']}, {ir['content']}")
+                logger.info(
+                    f"Enqueued results for segment {asr_result.idx}: {ir['id']}, {ir['content']}"
+                )
                 del ir
             # await websocket.send_json(asr_result.to_dict())
 
@@ -83,7 +85,7 @@ async def websocket_asr(
     async def task_recv_sid():
         while True:
             sid_result: dict = await sid_pull_socket.recv_pyobj()
-            #logger.info(f"Received SID results for segment {sid_result['idx']}")
+            # logger.info(f"Received SID results for segment {sid_result['idx']}")
             if not sid_result:
                 return
             ir = intermediate_result[sid_result["idx"]]
@@ -93,7 +95,9 @@ async def websocket_asr(
                 del ir["asr_finished"]
                 del ir["sid_finished"]
                 await result_queue.put(intermediate_result[sid_result["idx"]])
-                logger.info(f"Enqueued results for segment {sid_result['idx']}: {ir['id']}, {ir['content']}")
+                logger.info(
+                    f"Enqueued results for segment {sid_result['idx']}: {ir['id']}, {ir['content']}"
+                )
                 del ir
             # await websocket.send_json(sid_result)
 
@@ -107,7 +111,7 @@ async def websocket_asr(
         await asyncio.gather(
             task_send_pcm(), task_recv_asr(), task_recv_sid(), task_send_result()
         )
-    except WebSocketDisconnect as e :
+    except WebSocketDisconnect as e:
         logger.info(f"asr ws disconnected: {str(e)}")
     finally:
         byte_push_socket.close()
