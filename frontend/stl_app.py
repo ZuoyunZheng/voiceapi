@@ -64,7 +64,7 @@ def process_audio_and_send(websocket, file):
                 if not chunk:
                     break
                 yield chunk
-                # time.sleep(0.064)  # ~64ms per chunk at 16kHz to simulate real-time
+                time.sleep(0.016)  # 64ms per chunk at 16kHz ~ real-time
 
         try:
             for data in stream():
@@ -111,6 +111,9 @@ def receive_asr_results(websocket):
 
 def start_websocket_connection(file):
     """Start a new WebSocket connection if not already connected"""
+    logger.info("Clearing messages")
+    message_queue = Queue()
+    st.session_state["messages"] = []
     if (
         st.session_state["connection_status"] == "Connected"
         and st.session_state["websocket"]

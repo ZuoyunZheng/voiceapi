@@ -107,11 +107,12 @@ async def websocket_asr(
         await asyncio.gather(
             task_send_pcm(), task_recv_asr(), task_recv_sid(), task_send_result()
         )
-    except WebSocketDisconnect:
-        logger.info("asr: disconnected")
+    except WebSocketDisconnect as e :
+        logger.info(f"asr ws disconnected: {str(e)}")
     finally:
         byte_push_socket.close()
         asr_pull_socket.close()
+        sid_pull_socket.close()
 
 
 if __name__ == "__main__":
