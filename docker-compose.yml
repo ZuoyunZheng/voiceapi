@@ -1,4 +1,5 @@
-name: voiceapi
+version: "3.8"
+
 services:
   # Frontend
   frontend:
