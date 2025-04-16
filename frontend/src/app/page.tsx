@@ -12,7 +12,7 @@ export default function Home() {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+      audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)() || null;
     }
 
     async function initializeRecorder() {
