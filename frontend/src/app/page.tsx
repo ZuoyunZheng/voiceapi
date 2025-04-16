@@ -1,31 +1,20 @@
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
-import Recorder from 'recorder-js';
+import { useState, useEffect } from 'react';
 
 const ws = new WebSocket('ws://localhost:8000/asr');
 
 export default function Home() {
-  const [messages, setMessages] = useState([]);
-  const [recorder, setRecorder] = useState(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
+  interface Message {
+    id: number;
+    content: string;
+  }
+
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+  const [audioChunks, setAudioChunks] = useState<Blob[]>([]);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      audioContextRef.current = new (window.AudioContext)() || null;
-    }
-
-    async function initializeRecorder() {
-      if (!audioContextRef.current) return;
-      const rec = new Recorder(audioContextRef.current, {
-        
-      });
-
-      setRecorder(rec);
-    }
-
-    initializeRecorder();
-
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
       setMessages(prev => [...prev, data]);
@@ -37,41 +26,32 @@ export default function Home() {
   }, []);
 
   const startRecording = async () => {
-    if (!recorder) return;
     try {
-      await recorder.init();
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      audioContextRef.current.resume();
-      recorder.start(stream);
+      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+
+      recorder.ondataavailable = (event) => {
+        setAudioChunks(prev => [...prev, event.data]);
+      };
+
+      recorder.onstop = () => {
+        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+        // Convert audioBlob to PCM and send to WebSocket
+        ws.send(audioBlob);
+        setAudioChunks([]);
+      };
+
+      setMediaRecorder(recorder);
+      recorder.start();
     } catch (error) {
       console.error('Error starting recording:', error);
     }
   };
 
-  const stopRecording = async () => {
-    if (!recorder) return;
-    try {
-      const { buffer } = await recorder.stop();
-      const pcmData = convertToPCM(buffer[0]); // Assuming single channel
-      ws.send(pcmData);
-      recorder.clear();
-    } catch (error) {
-      console.error('Error stopping recording:', error);
+  const stopRecording = () => {
+    if (mediaRecorder) {
+      mediaRecorder.stop();
     }
-  };
-
-  const convertToPCM = (audioData) => {
-    const floatTo16BitPCM = (output, offset, input) => {
-      for (let i = 0; i < input.length; i++, offset += 2) {
-        const s = Math.max(-1, Math.min(1, input[i]));
-        output.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
-      }
-    };
-
-    const buffer = new ArrayBuffer(audioData.length * 2);
-    const output = new DataView(buffer);
-    floatTo16BitPCM(output, 0, audioData);
-    return buffer;
   };
 
   return (
