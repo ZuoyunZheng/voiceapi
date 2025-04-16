@@ -1,12 +1,12 @@
 name: voiceapi
 services:
   # Frontend
-  streamlit:
+  frontend:
     build:
-      context: .
-      dockerfile: frontend/docker/Dockerfile.streamlit
+      context: ./frontend
+      dockerfile: docker/Dockerfile
     ports:
-      - "8501:8501"
+      - "8501:3000"
     devices:
       - /dev/snd:/dev/snd
     # volumes:
@@ -21,7 +21,7 @@ services:
   # Backend
   app:
     build:
-      context: .
+      context: ./frontend
       dockerfile: backend/docker/Dockerfile.app
     ports:
       - "8000:8000"
@@ -32,7 +32,7 @@ services:
 
   vad:
     build:
-      context: .
+      context: ./frontend
       dockerfile: backend/docker/Dockerfile.sherpa
     runtime: nvidia
     volumes:
@@ -44,7 +44,7 @@ services:
 
   asr:
     build:
-      context: .
+      context: ./frontend
       dockerfile: backend/docker/Dockerfile.sherpa
     runtime: nvidia
     volumes:
@@ -56,7 +56,7 @@ services:
 
   sid:
     build:
-      context: .
+      context: ./frontend
       dockerfile: backend/docker/Dockerfile.sherpa
     runtime: nvidia
     volumes:
