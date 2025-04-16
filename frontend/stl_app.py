@@ -112,7 +112,7 @@ def receive_asr_results(websocket):
 def start_websocket_connection(file):
     """Start a new WebSocket connection if not already connected"""
     logger.info("Clearing messages")
-    message_queue = Queue()
+    message_queue = Queue()  # noqa: F841
     st.session_state["messages"] = []
     if (
         st.session_state["connection_status"] == "Connected"
@@ -225,11 +225,12 @@ def main(args):
         while not message_queue.empty():
             message = message_queue.get()
             st.session_state["messages"].append(message)
-            logger.info(f"STL main thread {len(st.session_state['messages'])-1}: {message}")
+            logger.info(
+                f"STL main thread {len(st.session_state['messages']) - 1}: {message}"
+            )
     else:
         time.sleep(1)
     st.rerun()
-
 
 
 if __name__ == "__main__":
