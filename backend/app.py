@@ -51,7 +51,7 @@ async def websocket_asr(
             "type": "transcript",  # transcript, assistant, instruction
             "asr_finished": False,
             "sid_finished": False,
-            "kws_finished": False,
+            "kws_finished": True,
         }
     )
     result_queue = asyncio.Queue()
@@ -77,7 +77,7 @@ async def websocket_asr(
             del ir["kws_finished"]
             await result_queue.put(intermediate_result[idx])
             logger.info(
-                f"Enqueued results for segment {idx}: {ir['id']}, {ir['content']}"
+                f"Enqueued results for segment {idx}: {ir['id']}, {ir['content'], ir['type']}"
             )
             del ir
 

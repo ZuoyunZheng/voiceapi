@@ -50,6 +50,7 @@ class KWSStream:
             if not st:
                 st = time.time()
             kws_stream.accept_waveform(self.sample_rate, samples)
+            result = None
             while self.model.is_ready(kws_stream):
                 self.model.decode_stream(kws_stream)
                 result = self.model.get_result(kws_stream)
@@ -62,6 +63,10 @@ class KWSStream:
                     duration = time.time() - st
                     logger.info(f"{segment_id}: {result} ({duration:.2f}s)")
                     st = None
+            if not result:
+                duration = time.time() - st
+                logger.info(f"{segment_id}: {result} ({duration:.2f}s)")
+                st = None
 
     async def close(self):
         self.push_socket.close()
