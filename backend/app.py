@@ -63,7 +63,7 @@ async def websocket_asr(
             "type": "transcript",  # transcript, assistant, instruction
             "asr_finished": False,
             "sid_finished": False,
-            "kws_finished": True,
+            "kws_finished": False,
         }
     )
     result_queue = asyncio.Queue()
@@ -90,7 +90,7 @@ async def websocket_asr(
             del ir["kws_finished"]
             await result_queue.put(intermediate_result[idx])
             logger.info(
-                f"Enqueued results for segment {idx}: {ir['id']}, {ir['content'], ir['type']}"
+                f"Enqueued results for segment {idx}: speaker {ir['id']} {ir['type']}, {ir['content']}"
             )
             del ir
 
@@ -119,7 +119,7 @@ async def websocket_asr(
     async def task_recv_kws():
         while True:
             kws_result: dict = await kws_pull_socket.recv_pyobj()
-            logger.info(f"Received KWS results for segment {kws_result['idx']}")
+            # logger.info(f"Received KWS results for segment {kws_result['idx']}")
             if not kws_result:
                 return
             ir = intermediate_result[kws_result["idx"]]

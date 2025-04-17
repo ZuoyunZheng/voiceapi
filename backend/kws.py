@@ -52,21 +52,27 @@ class KWSStream:
             kws_stream.accept_waveform(self.sample_rate, samples)
             result = None
             while self.model.is_ready(kws_stream):
+                # logger.info(f"{segment_id}: Decoding")
                 self.model.decode_stream(kws_stream)
                 result = self.model.get_result(kws_stream)
                 # TODO: look at if kws breaks loop
                 if result:
                     await self.push_socket.send_pyobj(
-                        {"idx": segment_id, "type": "instruction"}
+                        {"idx": segment_id, "type": "instruction", "finished": True}
                     )
                     self.model.reset_stream(kws_stream)
                     duration = time.time() - st
-                    logger.info(f"{segment_id}: {result} ({duration:.2f}s)")
-                    st = None
+                    logger.info(f"{segment_id}: KW -- {result} ({duration:.2f}s)")
+                    break
             if not result:
                 duration = time.time() - st
-                logger.info(f"{segment_id}: {result} ({duration:.2f}s)")
-                st = None
+                logger.info(
+                    f"{segment_id}: {result if result else '<None>'} ({duration:.2f}s)"
+                )
+                await self.push_socket.send_pyobj(
+                    {"idx": segment_id, "type": "transcript", "finished": True}
+                )
+            st = None
 
     async def close(self):
         self.push_socket.close()

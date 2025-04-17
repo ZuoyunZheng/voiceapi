@@ -78,6 +78,18 @@ services:
       - PULL_PORT=tcp://vad:8002
     command: uv run backend/kws.py --docker --provider cuda
 
+  # agent:
+  #   build:
+  #     context: .
+  #     dockerfile: backend/docker/Dockerfile.agent
+  #   runtime: nvidia
+  #   volumes:
+  #     - ./models:/app/models:ro
+  #   environment:
+  #     - PUSH_PORT=tcp://*:8003
+  #     - PULL_PORT=tcp://vad:8002
+  #   command: uv run backend/asr.py --docker --provider cuda
+
 networks:
   default:
     driver: bridge
