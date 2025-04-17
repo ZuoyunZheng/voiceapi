@@ -4,20 +4,26 @@ import logging
 import uvicorn
 from utils import ASRResult
 import argparse
-import os
 import zmq
 import zmq.asyncio
 from collections import defaultdict
 
 context = zmq.asyncio.Context()
 app = FastAPI()
-# mic -ws:.../8000/asr-> app -8001-> vad -8002-> asr -8003-> app -ws->
-#                                        \8002-> sid -8004->
-#                                        \8002-> kws -8005->
-vad_address, vad_port = "0.0.0.0", "8001"
+# frontend:mic -ws:asr-> app -8001-\
+#     /----------------------------/
+#     \-> vad -8002-> asr -8003-> app -ws:asr-> frontend
+#             \8002-> sid -8004/      \
+#             \8002-> kws -8005/       --8007-> agent -8008-> app -ws:agent-> frontend
+#             \8002-> dia -8006/      /
+# frontend:txt -ws:agent-------------
+audio_address, audio_port = "0.0.0.0", "8001"
 asr_address, asr_port = "0.0.0.0", "8003"
 sid_address, sid_port = "0.0.0.0", "8004"
 kws_address, kws_port = "0.0.0.0", "8005"
+dia_address, dia_port = "0.0.0.0", "8006"
+trans_address, trans_port = "0.0.0.0", "8007"
+agent_address, agent_port = "0.0.0.0", "8008"
 logger = logging.getLogger(__file__)
 
 
@@ -31,18 +37,24 @@ async def websocket_asr(
     await websocket.accept()
 
     # Set up ZeroMQ sockets
-    byte_push_port = f"tcp://{vad_address}:{vad_port}"
+    audio_push_port = f"tcp://{audio_address}:{audio_port}"
     asr_pull_port = f"tcp://{asr_address}:{asr_port}"
     sid_pull_port = f"tcp://{sid_address}:{sid_port}"
     kws_pull_port = f"tcp://{kws_address}:{kws_port}"
-    byte_push_socket = context.socket(zmq.PUSH)
-    byte_push_socket.bind(byte_push_port)
+    trans_push_port = f"tcp://{trans_address}:{trans_port}"
+    agent_pull_port = f"tcp://{agent_address}:{agent_port}"
+    audio_push_socket = context.socket(zmq.PUSH)
+    audio_push_socket.bind(audio_push_port)
     asr_pull_socket = context.socket(zmq.PULL)
     asr_pull_socket.connect(asr_pull_port)
     sid_pull_socket = context.socket(zmq.PULL)
     sid_pull_socket.connect(sid_pull_port)
     kws_pull_socket = context.socket(zmq.PULL)
     kws_pull_socket.connect(kws_pull_port)
+    trans_push_socket = context.socket(zmq.PUSH)
+    trans_push_socket.bind(trans_push_port)
+    agent_pull_socket = context.socket(zmq.PULL)
+    agent_pull_socket.connect(agent_pull_port)
     speaker_ids = {0: "Assistant", -1: "Unknown speaker"}
     intermediate_result = defaultdict(
         lambda: {
@@ -56,7 +68,7 @@ async def websocket_asr(
     )
     result_queue = asyncio.Queue()
     logger.info(
-        f"App ports: {byte_push_port}, {asr_pull_port}, {sid_pull_port}, {kws_pull_port}"
+        f"App ports: {audio_push_port}, {asr_pull_port}, {sid_pull_port}, {kws_pull_port}, {trans_push_port}, {agent_pull_port}"
     )
 
     # Message passing pipeline
@@ -64,12 +76,13 @@ async def websocket_asr(
     async def task_send_pcm():
         while True:
             pcm_bytes = await websocket.receive_bytes()
+            # TODO: implement interrupt mechanism for downstream
             if not pcm_bytes:
                 logging.info("Received zero bytes, returning")
                 return
-            await byte_push_socket.send_pyobj(pcm_bytes)
+            await audio_push_socket.send_pyobj(pcm_bytes)
 
-    async def push_if_ready(idx):
+    async def queue_if_ready(idx):
         ir = intermediate_result[idx]
         if ir["asr_finished"] and ir["sid_finished"] and ir["kws_finished"]:
             del ir["asr_finished"]
@@ -90,7 +103,7 @@ async def websocket_asr(
             ir = intermediate_result[asr_result.idx]
             ir["content"] += asr_result.text
             ir["asr_finished"] = asr_result.finished
-            await push_if_ready(asr_result.idx)
+            await queue_if_ready(asr_result.idx)
 
     async def task_recv_sid():
         while True:
@@ -101,7 +114,7 @@ async def websocket_asr(
             ir = intermediate_result[sid_result["idx"]]
             ir["id"] = sid_result["name"]
             ir["sid_finished"] = sid_result["finished"]
-            await push_if_ready(sid_result["idx"])
+            await queue_if_ready(sid_result["idx"])
 
     async def task_recv_kws():
         while True:
@@ -112,13 +125,23 @@ async def websocket_asr(
             ir = intermediate_result[kws_result["idx"]]
             ir["type"] = kws_result["type"]
             ir["kws_finished"] = kws_result["finished"]
-            await push_if_ready(kws_result["idx"])
+            await queue_if_ready(kws_result["idx"])
+
+    async def task_recv_agent():
+        while True:
+            agent_result: dict = await agent_pull_socket.recv_pyobj()
+            logger.info(f"Received agent response for segment {agent_result['idx']}")
+            if not agent_result:
+                return
+            await result_queue.put(agent_result)
 
     # Send result
     async def task_send_result():
         while True:
             result = await result_queue.get()
             await websocket.send_json(result)
+            if result["type"] == "instruct":
+                await trans_push_socket.send_pyobj(result)
 
     try:
         await asyncio.gather(
@@ -126,25 +149,21 @@ async def websocket_asr(
             task_recv_asr(),
             task_recv_sid(),
             task_recv_kws(),
+            task_recv_agent(),
             task_send_result(),
         )
     except WebSocketDisconnect as e:
         logger.info(f"asr ws disconnected: {str(e)}")
     finally:
-        byte_push_socket.close()
+        audio_push_socket.close()
         asr_pull_socket.close()
         sid_pull_socket.close()
         kws_pull_socket.close()
+        trans_push_socket.close()
+        agent_pull_socket.close()
 
 
 if __name__ == "__main__":
-    models_root = "./models"
-
-    for d in [".", "..", "../.."]:
-        if os.path.isdir(f"{d}/models"):
-            models_root = f"{d}/models"
-            break
-
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=8000, help="port number")
     parser.add_argument("--addr", type=str, default="127.0.0.1", help="serve address")
@@ -152,12 +171,22 @@ if __name__ == "__main__":
     args = parser.parse_args()
     # TODO: make arg parsing better designed
     if args.docker:
-        args.addr, vad_address, asr_address, sid_address, kws_address = (
+        (
+            args.addr,
+            audio_address,
+            asr_address,
+            sid_address,
+            kws_address,
+            trans_address,
+            agent_address,
+        ) = (
             "0.0.0.0",
             "*",
             "asr",
             "sid",
             "kws",
+            "*",
+            "agent",
         )
 
     logging.basicConfig(
