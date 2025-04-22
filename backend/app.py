@@ -1,12 +1,13 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
+import argparse
 import asyncio
 import logging
+from collections import defaultdict
+
 import uvicorn
-from utils import ASRResult
-import argparse
 import zmq
 import zmq.asyncio
-from collections import defaultdict
+from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
+from utils import ASRResult
 
 context = zmq.asyncio.Context()
 app = FastAPI()

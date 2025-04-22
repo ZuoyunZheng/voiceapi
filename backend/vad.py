@@ -1,13 +1,13 @@
-import logging
-import time
-import sherpa_onnx
-import os
+import argparse
 import asyncio
+import logging
+import os
+import time
+
 import numpy as np
+import sherpa_onnx
 import zmq
 import zmq.asyncio
-import argparse
-
 
 logger = logging.getLogger(__file__)
 _vad_engines = dict()

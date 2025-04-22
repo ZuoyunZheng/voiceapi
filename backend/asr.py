@@ -1,10 +1,11 @@
 import argparse
-from typing import Union
-import logging
-import time
-import sherpa_onnx
-import os
 import asyncio
+import logging
+import os
+import time
+from typing import Union
+
+import sherpa_onnx
 import zmq
 import zmq.asyncio
 from utils import ASRResult

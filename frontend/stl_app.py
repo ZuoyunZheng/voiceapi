@@ -1,17 +1,16 @@
-import streamlit as st
-import threading
-import json
 import argparse
-import pyaudio
-import websockets.sync.client
-from websockets.exceptions import ConnectionClosed
-from queue import Queue
-import logging
-from pydub import AudioSegment
 import io
-
+import json
+import logging
+import threading
 import time
+from queue import Queue
 
+import pyaudio
+import streamlit as st
+import websockets.sync.client
+from pydub import AudioSegment
+from websockets.exceptions import ConnectionClosed
 
 # Audio parameters
 CHUNK = 1024

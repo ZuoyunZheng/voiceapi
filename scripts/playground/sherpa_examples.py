@@ -4,12 +4,13 @@ Real-time ASR using microphone
 """
 
 import argparse
-import logging
-import sherpa_onnx
-import os
-import time
-import struct
 import asyncio
+import logging
+import os
+import struct
+import time
+
+import sherpa_onnx
 import soundfile
 
 try:

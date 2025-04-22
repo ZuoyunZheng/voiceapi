@@ -1,7 +1,8 @@
-import gradio as gr
 import asyncio
-import websockets
 import json
+
+import gradio as gr
+import websockets
 
 # Global variables to manage WebSocket connection
 connected = False
