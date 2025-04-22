@@ -83,15 +83,15 @@ async def websocket_asr(
                 return
             await audio_push_socket.send_pyobj(pcm_bytes)
 
-    async def queue_if_ready(idx):
-        ir = intermediate_result[idx]
+    async def queue_if_ready(id):
+        ir = intermediate_result[id]
         if ir["asr_finished"] and ir["sid_finished"] and ir["kws_finished"]:
             del ir["asr_finished"]
             del ir["sid_finished"]
             del ir["kws_finished"]
-            await result_queue.put(intermediate_result[idx])
+            await result_queue.put(intermediate_result[id])
             logger.info(
-                f"Enqueued results for segment {idx}: speaker {ir['id']} {ir['type']}, {ir['content']}"
+                f"Enqueued results for segment {id}: speaker {ir['id']} {ir['type']}, {ir['content']}"
             )
             del ir
 
@@ -131,7 +131,7 @@ async def websocket_asr(
     async def task_recv_agent():
         while True:
             agent_result: dict = await agent_pull_socket.recv_pyobj()
-            logger.info(f"Received agent response for segment {agent_result['idx']}")
+            # logger.info(f"Received Agent response for segment {agent_result['id']}")
             if not agent_result:
                 return
             await result_queue.put(agent_result)
@@ -141,7 +141,7 @@ async def websocket_asr(
         while True:
             result = await result_queue.get()
             await websocket.send_json(result)
-            if result["type"] == "instruct":
+            if result["type"] == "instruction":
                 await trans_push_socket.send_pyobj(result)
 
     try:
