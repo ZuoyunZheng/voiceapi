@@ -58,7 +58,7 @@ class AgentStream:
                     logger.info(message)
                 else:
                     logger.info(message.pretty_repr())
-                response += message.content
+                response = message.content
             await self.push_socket.send_pyobj(
                 {"id": "Assistant", "content": response, "type": "assistant"}
             )
