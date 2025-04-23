@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 interface Message {
   id: number;
@@ -14,6 +14,10 @@ export default function Home() {
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'error'>('disconnected');
   const [ws, setWs] = useState<WebSocket | null>(null);
+  const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null);
+  const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
 
   // Initialize WebSocket connection
   useEffect(() => {
@@ -90,15 +94,10 @@ export default function Home() {
       source.connect(scriptProcessor);
       scriptProcessor.connect(audioContext.destination);
 
-      setMediaRecorder({
-        stop: () => {
-          scriptProcessor.disconnect();
-          source.disconnect();
-          stream.getTracks().forEach(track => track.stop());
-          audioContext.close();
-          setIsRecording(false);
-        }
-      });
+      scriptProcessorRef.current = scriptProcessor;
+      sourceRef.current = source;
+      streamRef.current = stream;
+      audioContextRef.current = audioContext;
       setIsRecording(true);
     } catch (error) {
       console.error('Error starting recording:', error);
@@ -108,6 +107,10 @@ export default function Home() {
 
   const stopRecording = () => {
     if (isRecording) {
+      scriptProcessorRef.current?.disconnect();
+      sourceRef.current?.disconnect();
+      streamRef.current?.getTracks().forEach(track => track.stop());
+      audioContextRef.current?.close();
       setIsRecording(false);
     }
   };
