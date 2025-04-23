@@ -1,20 +1,23 @@
-name: voiceapi
 services:
   # Frontend
-  streamlit:
+  frontend:
     build:
-      context: .
-      dockerfile: frontend/docker/Dockerfile.streamlit
+      context: frontend
+      dockerfile: docker/Dockerfile
     ports:
-      - "8501:8501"
-    devices:
-      - /dev/snd:/dev/snd
+      - "8501:3000"
+    # No more audio related configs since audio is handled browser/client side
+    # devices:
+    #   - /dev/snd:/dev/snd
     # volumes:
     #   - /dev/shm:/dev/shm
-    environment:
-      - ALSA_CARD=Generic_1
+    # environment:
+    #   - ALSA_CARD=Generic_1
     # group_add:
     #   - audio
+    # Websocket URL for when browser/client not on localhost
+    # environment:
+    #   - NEXT_PUBLIC_WEBSOCKET_URL: ws://localhost:8000/asr
     depends_on:
       - app
 
@@ -29,6 +32,8 @@ services:
       - vad
       - asr
       - sid
+      - kws
+      - agent
 
   vad:
     build:
