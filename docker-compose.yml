@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   # Frontend
   frontend:
@@ -8,12 +6,13 @@ services:
       dockerfile: docker/Dockerfile
     ports:
       - "8501:3000"
-    devices:
-      - /dev/snd:/dev/snd
+    # No more audio related configs since audio is handled browser/client side
+    # devices:
+    #   - /dev/snd:/dev/snd
     # volumes:
     #   - /dev/shm:/dev/shm
-    environment:
-      - ALSA_CARD=Generic_1
+    # environment:
+    #   - ALSA_CARD=Generic_1
     # group_add:
     #   - audio
     depends_on:
@@ -30,6 +29,8 @@ services:
       - vad
       - asr
       - sid
+      - kws
+      - agent
 
   vad:
     build:
