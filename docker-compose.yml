@@ -28,12 +28,13 @@ services:
       dockerfile: backend/docker/Dockerfile.app
     ports:
       - "8000:8000"
-    depends_on: # TODO: check dependency
+    depends_on:
       - vad
       - asr
       - sid
       - kws
       - agent
+      - db
 
   vad:
     build:
@@ -94,6 +95,20 @@ services:
       - PUSH_PORT=tcp://*:8008
       - PULL_PORT=tcp://app:8007
     command: uv run backend/agent.py --docker
+
+  db:  # Define the database service
+    image: postgres:13
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=voiceapi
+    volumes:
+      - db_data:/var/lib/postgresql/data  # Persist data across restarts
+
+volumes:
+  db_data:  # Define the volume for persistent data
 
 networks:
   default:
