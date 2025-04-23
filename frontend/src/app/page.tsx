@@ -21,16 +21,15 @@ export default function Home() {
 
   // Initialize WebSocket connection
   useEffect(() => {
-    // const getWebSocketUrl = (): string => {
-    //   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    //   const hostname = window.location.hostname;
-    //   // Use the actual port where your WebSocket server is exposed
-    //   return `${protocol}//${hostname}:8000/asr`;
-    // };
+    const getWebSocketUrl = (): string => {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const hostname = window.location.hostname;
+      // Use the actual port where your WebSocket server is exposed
+      return `${protocol}//${hostname}:8000/asr`;
+    };
 
     // Create WebSocket connection when component mounts
-    // const websocket = new WebSocket(getWebSocketUrl());
-    const ws = new WebSocket('ws://localhost:8000/asr')
+    const ws = new WebSocket(process.env.NEXT_PUBLIC_WEBSOCKET_URL || getWebSocketUrl());
 
     ws.onopen = () => {
       setConnectionStatus('connected');
@@ -85,7 +84,11 @@ export default function Home() {
 
         if (ws && ws.readyState === WebSocket.OPEN) {
           // Send PCM data to WebSocket server
-          ws.send(pcmData.buffer);
+          try {
+            ws.send(pcmData.buffer);
+          } catch (error) {
+            console.error('Failed to send data to WebSocket:', error);
+          }
         } else {
           console.error('WebSocket not connected');
         }
@@ -98,6 +101,10 @@ export default function Home() {
       sourceRef.current = source;
       streamRef.current = stream;
       audioContextRef.current = audioContext;
+      scriptProcessorRef.current = null;
+      sourceRef.current = null;
+      streamRef.current = null;
+      audioContextRef.current = null;
       setIsRecording(true);
     } catch (error) {
       console.error('Error starting recording:', error);

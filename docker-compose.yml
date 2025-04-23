@@ -15,6 +15,9 @@ services:
     #   - ALSA_CARD=Generic_1
     # group_add:
     #   - audio
+    # Websocket URL for when browser/client not on localhost
+    # environment:
+    #   - NEXT_PUBLIC_WEBSOCKET_URL: ws://localhost:8000/asr
     depends_on:
       - app
 
