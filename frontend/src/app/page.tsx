@@ -9,8 +9,8 @@ interface Message {
 
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
-  const [audioChunks, setAudioChunks] = useState<Blob[]>([]);
+  // const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+  // const [audioChunks, setAudioChunks] = useState<Blob[]>([]);
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'error'>('disconnected');
   const [ws, setWs] = useState<WebSocket | null>(null);
@@ -27,29 +27,29 @@ export default function Home() {
     // Create WebSocket connection when component mounts
     // const websocket = new WebSocket(getWebSocketUrl());
     const ws = new WebSocket('ws://localhost:8000/asr')
-    
+
     ws.onopen = () => {
       setConnectionStatus('connected');
       console.log('WebSocket connected');
     };
-    
+
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
       setMessages(prev => [...prev, data]);
     };
-    
+
     ws.onclose = () => {
       setConnectionStatus('disconnected');
       console.log('WebSocket disconnected');
     };
-    
+
     ws.onerror = (error) => {
       console.error('WebSocket error:', error);
       setConnectionStatus('error');
     };
-    
+
     setWs(ws);
-    
+
     return () => {
       ws.close();
     };
@@ -57,49 +57,48 @@ export default function Home() {
 
   const startRecording = async () => {
     try {
-      // Request audio with specific constraints for better compatibility
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
-        }
-      });
-      
-      // Try WebM first, fall back to other formats if needed
-      let mimeType = 'audio/webm';
-      if (!MediaRecorder.isTypeSupported(mimeType)) {
-        mimeType = 'audio/ogg';
-        if (!MediaRecorder.isTypeSupported(mimeType)) {
-          mimeType = '';  // Let browser choose
-        }
-      }
-      
-      const recorder = new MediaRecorder(stream, { 
-        mimeType: mimeType || undefined
+        },
       });
 
-      recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          setAudioChunks(prev => [...prev, event.data]);
+      const audioContext = new AudioContext({ sampleRate: 16000 });
+      const source = audioContext.createMediaStreamSource(stream);
+      const bufferSize = 4096; // Adjust buffer size as needed
+      const scriptProcessor = audioContext.createScriptProcessor(bufferSize, 1, 1);
+
+      scriptProcessor.onaudioprocess = (event) => {
+        const audioData = event.inputBuffer.getChannelData(0);
+        const pcmData = new Int16Array(audioData.length);
+
+        // Convert Float32Array to Int16Array (PCM)
+        for (let i = 0; i < audioData.length; i++) {
+          pcmData[i] = Math.max(-1, Math.min(1, audioData[i])) * 0x7FFF;
+        }
+
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          // Send PCM data to WebSocket server
+          ws.send(pcmData.buffer);
+        } else {
+          console.error('WebSocket not connected');
         }
       };
 
-      recorder.onstop = () => {
-        if (audioChunks.length > 0) {
-          const audioBlob = new Blob(audioChunks, { type: mimeType });
-          if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(audioBlob);
-            console.log('Sent audio data to server');
-          } else {
-            console.error('WebSocket not connected');
-          }
-          setAudioChunks([]);
-        }
-      };
+      source.connect(scriptProcessor);
+      scriptProcessor.connect(audioContext.destination);
 
-      recorder.start(100); // Collect data every 100ms for more real-time feedback
-      setMediaRecorder(recorder);
+      setMediaRecorder({
+        stop: () => {
+          scriptProcessor.disconnect();
+          source.disconnect();
+          stream.getTracks().forEach(track => track.stop());
+          audioContext.close();
+          setIsRecording(false);
+        }
+      });
       setIsRecording(true);
     } catch (error) {
       console.error('Error starting recording:', error);
@@ -108,38 +107,34 @@ export default function Home() {
   };
 
   const stopRecording = () => {
-    if (mediaRecorder && isRecording) {
-      mediaRecorder.stop();
+    if (isRecording) {
       setIsRecording(false);
-      
-      // Stop all audio tracks
-      mediaRecorder.stream.getTracks().forEach(track => track.stop());
     }
   };
 
   return (
     <div className="p-6 max-w-2xl mx-auto">
       <h1 className="text-2xl font-bold mb-4">WebSocket ASR Client</h1>
-      
+
       <div className="mb-4">
         <div className="flex items-center mb-2">
           <div className={`w-3 h-3 rounded-full mr-2 ${
-            connectionStatus === 'connected' ? 'bg-green-500' : 
+            connectionStatus === 'connected' ? 'bg-green-500' :
             connectionStatus === 'error' ? 'bg-red-500' : 'bg-gray-500'
           }`}></div>
           <span>WebSocket: {connectionStatus}</span>
         </div>
-        
+
         <div className="space-x-2">
-          <button 
-            onClick={startRecording} 
+          <button
+            onClick={startRecording}
             disabled={isRecording}
             className={`px-4 py-2 rounded ${isRecording ? 'bg-gray-300' : 'bg-blue-500 text-white'}`}
           >
             Start Recording
           </button>
-          <button 
-            onClick={stopRecording} 
+          <button
+            onClick={stopRecording}
             disabled={!isRecording}
             className={`px-4 py-2 rounded ${!isRecording ? 'bg-gray-300' : 'bg-red-500 text-white'}`}
           >
@@ -147,7 +142,7 @@ export default function Home() {
           </button>
         </div>
       </div>
-      
+
       <div>
         <h2 className="text-xl font-semibold mb-2">Messages:</h2>
         {messages.length === 0 ? (

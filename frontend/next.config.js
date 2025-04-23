@@ -8,7 +8,7 @@ const nextConfig = {
     return config;
   },
   output: 'standalone',
-  
+
   compiler: {
     // Enables the styled-components SWC transform
     styledComponents: true

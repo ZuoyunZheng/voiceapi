@@ -77,6 +77,7 @@ async def websocket_asr(
     async def task_send_pcm():
         while True:
             pcm_bytes = await websocket.receive_bytes()
+            logger.info(f"Received bytes from frontend")
             # TODO: implement interrupt mechanism for downstream
             if not pcm_bytes:
                 logging.info("Received zero bytes, returning")
