@@ -1,37 +1,41 @@
-import datetime
-
-from sqlalchemy import (
-    Column,
-    DateTime,
-    ForeignKey,
-    Integer,
-    String,
-    Text,
-    create_engine,
-)
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import create_engine, Column, Integer, String, ForeignKey, DateTime, Text, Enum, Interval, Date
 from sqlalchemy.orm import relationship, sessionmaker
+from sqlalchemy.ext.declarative import declarative_base
+import datetime
+import enum
 
 Base = declarative_base()
 
+class Session(Base):
+    __tablename__ = 'sessions'
+    session_id = Column(Integer, primary_key=True)
+    session_name = Column(String(255), nullable=False)
+    session_date = Column(Date, default=datetime.date.today)
+    transcripts = relationship("Transcript", back_populates="session")
 
 class Speaker(Base):
-    __tablename__ = "speaker"
-    id = Column(Integer, primary_key=True)
-    name = Column(String(255), nullable=False)
+    __tablename__ = 'speakers'
+    speaker_id = Column(Integer, primary_key=True)
+    speaker_name = Column(String(255), nullable=False)
     transcripts = relationship("Transcript", back_populates="speaker")
 
+class TranscriptType(enum.Enum):
+    transcript = "transcript"
+    assistant = "assistant"
+    instruction = "instruction"
 
 class Transcript(Base):
-    __tablename__ = "transcript"
+    __tablename__ = 'transcripts'
     segment_id = Column(Integer, primary_key=True)
-    speaker_id = Column(Integer, ForeignKey("speaker.id"), nullable=False)
+    session_id = Column(Integer, ForeignKey('sessions.session_id'), nullable=False)
+    speaker_id = Column(Integer, ForeignKey('speakers.speaker_id'), nullable=False)
+    type = Column(Enum(TranscriptType), nullable=False)
     content = Column(Text, nullable=False)
-    start_time = Column(DateTime, default=datetime.datetime.utcnow)
-    end_time = Column(DateTime, default=datetime.datetime.utcnow)
+    start_time = Column(DateTime, nullable=False)
+    duration = Column(Interval, nullable=False)
 
+    session = relationship("Session", back_populates="transcripts")
     speaker = relationship("Speaker", back_populates="transcripts")
-
 
 DATABASE_URL = "postgresql://user:password@db:5432/voiceapi"
 
@@ -39,6 +43,6 @@ engine = create_engine(DATABASE_URL)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-
 def init_db():
+    Base.metadata.drop_all(bind=engine) # Drop all tables
     Base.metadata.create_all(bind=engine)

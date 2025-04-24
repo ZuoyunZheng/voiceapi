@@ -10,6 +10,13 @@ import zmq.asyncio
 from db import SessionLocal, Speaker, Transcript
 from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
 from utils import ASRResult
+from db import SessionLocal, Session, Speaker, TranscriptType
+import datetime
+import time
+
+# Initialize session_id counter
+session_id_counter = 0
+speaker_id_counter = 0
 
 context = zmq.asyncio.Context()
 app = FastAPI()
@@ -140,43 +147,64 @@ async def websocket_asr(
 
     # Send result
     async def task_send_result():
-        while True:
+        global session_id_counter, speaker_id_counter
+        db = SessionLocal()
+        try:
+            # Initialize session if it's the first result
+            if session_id_counter == 0:
+                # Wipe all data
+                db.query(Transcript).delete()
+                db.query(Speaker).delete()
+                db.query(Session).delete()
+                db.commit()
+
+                session = Session(session_id=session_id_counter, session_name=f"meeting_{session_id_counter}", session_date=datetime.date.today())
+                db.add(session)
+                db.commit()
+                db.refresh(session)
+                session_id_counter += 1
+
             result = await result_queue.get()
             await websocket.send_json(result)
             if result["type"] == "instruction":
                 await trans_push_socket.send_pyobj(result)
 
             # Store transcript in the database
-            if result["type"] == "transcript":
-                db = SessionLocal()
-                try:
-                    speaker_name = result["id"]
-                    content = result["content"]
+            segment_id = len(db.query(Transcript).all())
+            if result["type"] in ["transcript", "assistant", "instruction"]:
+                speaker_name = result["id"]
+                content = result["content"]
+                transcript_type = result["type"]
 
-                    # Get or create speaker
-                    speaker = (
-                        db.query(Speaker).filter(Speaker.name == speaker_name).first()
-                    )
-                    if not speaker:
-                        speaker = Speaker(name=speaker_name)
-                        db.add(speaker)
-                        db.commit()
-                        db.refresh(speaker)
-
-                    # Create transcript segment
-                    transcript = Transcript(
-                        speaker_id=speaker.id,
-                        content=content,
-                        start_time=datetime.datetime.utcnow(),  # Replace with actual start time if available
-                        end_time=datetime.datetime.utcnow(),  # Replace with actual end time if available
-                    )
-                    db.add(transcript)
+                # Get or create speaker
+                speaker = db.query(Speaker).filter(Speaker.speaker_name == speaker_name).first()
+                if not speaker:
+                    speaker = Speaker(speaker_id=speaker_id_counter, speaker_name=speaker_name)
+                    db.add(speaker)
                     db.commit()
-                except Exception as e:
-                    print(f"Error storing transcript: {e}")
-                    db.rollback()
-                finally:
-                    db.close()
+                    db.refresh(speaker)
+                    speaker_id_counter += 1
+
+                # Create transcript segment
+                start_time = datetime.datetime.now()
+                # Simulate duration
+                duration = datetime.timedelta(seconds=5)
+                transcript = Transcript(
+                    segment_id=segment_id,
+                    session_id=0,
+                    speaker_id=speaker.speaker_id,
+                    type=TranscriptType[transcript_type],
+                    content=content,
+                    start_time=start_time,
+                    duration=duration
+                )
+                db.add(transcript)
+                db.commit()
+        except Exception as e:
+            print(f"Error storing transcript: {e}")
+            db.rollback()
+        finally:
+            db.close()
 
     try:
         await asyncio.gather(
