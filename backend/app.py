@@ -1,11 +1,13 @@
 import argparse
 import asyncio
+import datetime
 import logging
 from collections import defaultdict
 
 import uvicorn
 import zmq
 import zmq.asyncio
+from db import SessionLocal, Speaker, Transcript
 from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
 from utils import ASRResult
 
@@ -137,64 +139,64 @@ async def websocket_asr(
             await result_queue.put(agent_result)
 
     # Send result
-    from db import SessionLocal, Speaker, Transcript
-import datetime
 
-async def task_send_result():
-    while True:
-        result = await result_queue.get()
-        await websocket.send_json(result)
-        if result["type"] == "instruction":
-            await trans_push_socket.send_pyobj(result)
-        
-        # Store transcript in the database
-        if result["type"] == "transcript":
-            db = SessionLocal()
-            try:
-                speaker_name = result["id"]
-                content = result["content"]
+    async def task_send_result():
+        while True:
+            result = await result_queue.get()
+            await websocket.send_json(result)
+            if result["type"] == "instruction":
+                await trans_push_socket.send_pyobj(result)
 
-                # Get or create speaker
-                speaker = db.query(Speaker).filter(Speaker.name == speaker_name).first()
-                if not speaker:
-                    speaker = Speaker(name=speaker_name)
-                    db.add(speaker)
+            # Store transcript in the database
+            if result["type"] == "transcript":
+                db = SessionLocal()
+                try:
+                    speaker_name = result["id"]
+                    content = result["content"]
+
+                    # Get or create speaker
+                    speaker = (
+                        db.query(Speaker).filter(Speaker.name == speaker_name).first()
+                    )
+                    if not speaker:
+                        speaker = Speaker(name=speaker_name)
+                        db.add(speaker)
+                        db.commit()
+                        db.refresh(speaker)
+
+                    # Create transcript segment
+                    transcript = Transcript(
+                        speaker_id=speaker.id,
+                        content=content,
+                        start_time=datetime.datetime.utcnow(),  # Replace with actual start time if available
+                        end_time=datetime.datetime.utcnow(),  # Replace with actual end time if available
+                    )
+                    db.add(transcript)
                     db.commit()
-                    db.refresh(speaker)
+                except Exception as e:
+                    print(f"Error storing transcript: {e}")
+                    db.rollback()
+                finally:
+                    db.close()
 
-                # Create transcript segment
-                transcript = Transcript(
-                    speaker_id=speaker.id,
-                    content=content,
-                    start_time=datetime.datetime.utcnow(),  # Replace with actual start time if available
-                    end_time=datetime.datetime.utcnow()  # Replace with actual end time if available
-                )
-                db.add(transcript)
-                db.commit()
-            except Exception as e:
-                print(f"Error storing transcript: {e}")
-                db.rollback()
-            finally:
-                db.close()
-
-    try:
-        await asyncio.gather(
-            task_send_pcm(),
-            task_recv_asr(),
-            task_recv_sid(),
-            task_recv_kws(),
-            task_recv_agent(),
-            task_send_result(),
-        )
-    except WebSocketDisconnect as e:
-        logger.info(f"asr ws disconnected: {str(e)}")
-    finally:
-        audio_push_socket.close()
-        asr_pull_socket.close()
-        sid_pull_socket.close()
-        kws_pull_socket.close()
-        trans_push_socket.close()
-        agent_pull_socket.close()
+        try:
+            await asyncio.gather(
+                task_send_pcm(),
+                task_recv_asr(),
+                task_recv_sid(),
+                task_recv_kws(),
+                task_recv_agent(),
+                task_send_result(),
+            )
+        except WebSocketDisconnect as e:
+            logger.info(f"asr ws disconnected: {str(e)}")
+        finally:
+            audio_push_socket.close()
+            asr_pull_socket.close()
+            sid_pull_socket.close()
+            kws_pull_socket.close()
+            trans_push_socket.close()
+            agent_pull_socket.close()
 
 
 from db import init_db
