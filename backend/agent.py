@@ -60,7 +60,12 @@ class AgentStream:
                     logger.info(message.pretty_repr())
                 response = message.content
             await self.push_socket.send_pyobj(
-                {"id": "Assistant", "content": response, "type": "assistant"}
+                {
+                    "speaker_id": 0,
+                    "speaker_name": "Assistant",
+                    "segment_type": "assistant",
+                    "segment_content": response,
+                }
             )
 
     async def close(self):

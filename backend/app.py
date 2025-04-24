@@ -2,21 +2,15 @@ import argparse
 import asyncio
 import datetime
 import logging
+import time
 from collections import defaultdict
 
 import uvicorn
 import zmq
 import zmq.asyncio
-from db import SessionLocal, Speaker, Transcript
+from db import Session, SessionLocal, Speaker, Transcript, TranscriptType
 from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
 from utils import ASRResult
-from db import SessionLocal, Session, Speaker, TranscriptType
-import datetime
-import time
-
-# Initialize session_id counter
-session_id_counter = 0
-speaker_id_counter = 0
 
 context = zmq.asyncio.Context()
 app = FastAPI()
@@ -35,6 +29,11 @@ dia_address, dia_port = "0.0.0.0", "8006"
 trans_address, trans_port = "0.0.0.0", "8007"
 agent_address, agent_port = "0.0.0.0", "8008"
 logger = logging.getLogger(__file__)
+
+# New session everytime websocket is re-connected
+# TODO: Persistant counters from DB
+session_id_counter = 0
+# speaker_id_counter = 0
 
 
 @app.websocket("/asr")
@@ -65,12 +64,13 @@ async def websocket_asr(
     trans_push_socket.bind(trans_push_port)
     agent_pull_socket = context.socket(zmq.PULL)
     agent_pull_socket.connect(agent_pull_port)
-    speaker_ids = {0: "Assistant", -1: "Unknown speaker"}
+    name_2_id = {"Assistant": 0, "Unknown Speaker": -1}
     intermediate_result = defaultdict(
         lambda: {
-            "id": speaker_ids[-1],
-            "content": "",
-            "type": "transcript",  # transcript, assistant, instruction
+            "speaker_id": -1,
+            "speaker_name": "Unknown Speaker",
+            "segment_type": "transcript",  # transcript, assistant, instruction
+            "segment_content": "",
             "asr_finished": False,
             "sid_finished": False,
             "kws_finished": False,
@@ -92,15 +92,15 @@ async def websocket_asr(
                 return
             await audio_push_socket.send_pyobj(pcm_bytes)
 
-    async def queue_if_ready(id):
-        ir = intermediate_result[id]
+    async def queue_if_ready(idx):
+        ir = intermediate_result[idx]
         if ir["asr_finished"] and ir["sid_finished"] and ir["kws_finished"]:
             del ir["asr_finished"]
             del ir["sid_finished"]
             del ir["kws_finished"]
-            await result_queue.put(intermediate_result[id])
+            await result_queue.put((idx, ir))
             logger.info(
-                f"Enqueued results for segment {id}: speaker {ir['id']} {ir['type']}, {ir['content']}"
+                f"Enqueued results for segment {idx} ({ir['speaker_name']}, {ir['segment_type']}): {ir['segment_content']}"
             )
             del ir
 
@@ -111,7 +111,7 @@ async def websocket_asr(
             if not asr_result:
                 return
             ir = intermediate_result[asr_result.idx]
-            ir["content"] += asr_result.text
+            ir["segment_content"] += asr_result.text
             ir["asr_finished"] = asr_result.finished
             await queue_if_ready(asr_result.idx)
 
@@ -122,7 +122,10 @@ async def websocket_asr(
             if not sid_result:
                 return
             ir = intermediate_result[sid_result["idx"]]
-            ir["id"] = sid_result["name"]
+            ir["speaker_name"] = sid_result["name"]
+            if sid_result["name"] not in name_2_id:
+                name_2_id[sid_result["name"]] = len(name_2_id)
+            ir["speaker_id"] = name_2_id[sid_result["name"]]
             ir["sid_finished"] = sid_result["finished"]
             await queue_if_ready(sid_result["idx"])
 
@@ -133,7 +136,7 @@ async def websocket_asr(
             if not kws_result:
                 return
             ir = intermediate_result[kws_result["idx"]]
-            ir["type"] = kws_result["type"]
+            ir["segment_type"] = kws_result["type"]
             ir["kws_finished"] = kws_result["finished"]
             await queue_if_ready(kws_result["idx"])
 
@@ -147,43 +150,49 @@ async def websocket_asr(
 
     # Send result
     async def task_send_result():
+        # Prepare DB for new session
+        # TODO: async?
         global session_id_counter, speaker_id_counter
         db = SessionLocal()
-        try:
-            # Initialize session if it's the first result
-            if session_id_counter == 0:
-                # Wipe all data
-                db.query(Transcript).delete()
-                db.query(Speaker).delete()
-                db.query(Session).delete()
-                db.commit()
+        # Initialize session if it's the first result
+        if session_id_counter == 0:
+            # Wipe all data
+            db.query(Transcript).delete()
+            db.query(Speaker).delete()
+            db.query(Session).delete()
+            db.commit()
+        session = Session(
+            session_id=session_id_counter,
+            session_name=f"meeting_{session_id_counter}",
+            session_date=datetime.date.today(),
+        )
+        db.add(session)
+        db.commit()
+        db.refresh(session)
+        session_id_counter += 1
 
-                session = Session(session_id=session_id_counter, session_name=f"meeting_{session_id_counter}", session_date=datetime.date.today())
-                db.add(session)
-                db.commit()
-                db.refresh(session)
-                session_id_counter += 1
-
-            result = await result_queue.get()
+        while True:
+            # Reply result to frontend via websocket
+            segment_id, result = await result_queue.get()
             await websocket.send_json(result)
+
+            # Send result to agent module
             if result["type"] == "instruction":
                 await trans_push_socket.send_pyobj(result)
 
-            # Store transcript in the database
-            segment_id = len(db.query(Transcript).all())
-            if result["type"] in ["transcript", "assistant", "instruction"]:
-                speaker_name = result["id"]
-                content = result["content"]
-                transcript_type = result["type"]
+            # Send result to diarization module for second pass
 
-                # Get or create speaker
-                speaker = db.query(Speaker).filter(Speaker.speaker_name == speaker_name).first()
-                if not speaker:
-                    speaker = Speaker(speaker_id=speaker_id_counter, speaker_name=speaker_name)
-                    db.add(speaker)
-                    db.commit()
-                    db.refresh(speaker)
-                    speaker_id_counter += 1
+            # Write to DB
+            try:
+                speaker_id = result["speaker_id"]
+                speaker_name = result["speaker_name"]
+                segment_content = result["segment_content"]
+                segment_type = result["segment_type"]
+
+                speaker = Speaker(speaker_id=speaker_id, speaker_name=speaker_name)
+                db.add(speaker)
+                db.commit()
+                db.refresh(speaker)
 
                 # Create transcript segment
                 start_time = datetime.datetime.now()
@@ -191,20 +200,19 @@ async def websocket_asr(
                 duration = datetime.timedelta(seconds=5)
                 transcript = Transcript(
                     segment_id=segment_id,
-                    session_id=0,
+                    session_id=session_id_counter,
                     speaker_id=speaker.speaker_id,
-                    type=TranscriptType[transcript_type],
-                    content=content,
+                    segment_type=TranscriptType[transcript_type],
+                    segment_content=segment_content,
                     start_time=start_time,
-                    duration=duration
+                    duration=duration,
                 )
                 db.add(transcript)
                 db.commit()
-        except Exception as e:
-            print(f"Error storing transcript: {e}")
-            db.rollback()
-        finally:
-            db.close()
+            except Exception as e:
+                print(f"Error storing transcript: {e}")
+                db.rollback()
+                db.close()
 
     try:
         await asyncio.gather(

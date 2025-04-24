@@ -62,7 +62,7 @@ class SIDStream:
             name = sid_manager.search(embedding, threshold=0.25)
             if not name:
                 # register it
-                name = f"{self.num_speakers}"
+                name = f"speaker_{self.num_speakers}"
                 status = sid_manager.add(name, embedding)
                 if not status:
                     raise RuntimeError(f"Failed to register speaker {name}")

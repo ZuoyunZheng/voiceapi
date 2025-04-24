@@ -21,6 +21,8 @@ fastapi = [
     "uvicorn==0.30.6",
     "pyzmq==26.3.0",
     "websockets==15.0.1",
+    "sqlalchemy>=2.0.40",
+    "psycopg2>=2.9.10",
 ]
 
 sherpa = [
