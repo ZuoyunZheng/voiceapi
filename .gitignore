@@ -28,3 +28,4 @@ models/
 examples/*.wav
 models
 data/
+.aider*

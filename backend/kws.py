@@ -103,7 +103,7 @@ def load_kws_engine(
         decoder=decoder,
         joiner=joiner,
         num_threads=threads,
-        max_active_paths=4,
+        max_active_paths=10,
         keywords_file=keywords_file,
         keywords_score=1.0,
         keywords_threshold=0.25,
