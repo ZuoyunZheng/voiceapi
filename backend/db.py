@@ -73,6 +73,13 @@ class DatabaseManager:
                         UNIQUE(session_id, local_speaker_id)
                     )
                 """)
+                # Add indexes for foreign keys in session_speakers
+                await cur.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_session_speakers_session_id ON session_speakers(session_id);
+                """)
+                await cur.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_session_speakers_speaker_id ON session_speakers(speaker_id);
+                """)
 
                 # Create transcript_types enum
                 await cur.execute("""
@@ -98,6 +105,12 @@ class DatabaseManager:
                         duration INTERVAL NOT NULL,
                         UNIQUE(session_id, segment_index)
                     )
+                """)
+                # Add index for foreign key in transcripts
+                # Note: Index on (session_id, segment_index) is likely created automatically by the UNIQUE constraint.
+                # Indexing session_id separately might be redundant.
+                await cur.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_transcripts_session_speaker_id ON transcripts(session_speaker_id);
                 """)
 
     async def reset_database(self) -> None:
@@ -492,6 +505,18 @@ async def setup_database():
 from fastapi import FastAPI, Depends
 
 app = FastAPI()
+
+db_manager: DatabaseManager = None
+
+@app.on_event("startup")
+async def startup_event():
+    global db_manager
+    db_manager = await setup_database()
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    if db_manager:
+        await db_manager.close()
 
 # Database dependency
 async def get_db():
