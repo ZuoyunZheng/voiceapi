@@ -4,16 +4,24 @@ import datetime
 import logging
 import time
 from collections import defaultdict
+from typing import Any, Dict, List
 
 import uvicorn
 import zmq
 import zmq.asyncio
-from db import Session, SessionLocal, Speaker, Transcript, TranscriptType
-from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
+from config import config, update_config
+from db import DatabaseManager, TranscriptType
+from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from utils import ASRResult
 
 context = zmq.asyncio.Context()
-app = FastAPI()
+app = FastAPI(
+    title="VoiceAPI", description="Real-time voice processing with PostgreSQL storage"
+)
+
+# Global database manager
+db_manager: DatabaseManager = None
+
 # frontend:mic -ws:asr-> app -8001-\
 #     /----------------------------/
 #     \-> vad -8002-> asr -8003-> app -ws:asr-> frontend
@@ -21,19 +29,47 @@ app = FastAPI()
 #             \8002-> kws -8005/       --8007-> agent -8008-> app -ws:agent-> frontend
 #             \8002-> dia -8006/      /
 # frontend:txt -ws:agent-------------
-audio_address, audio_port = "0.0.0.0", "8001"
-asr_address, asr_port = "0.0.0.0", "8003"
-sid_address, sid_port = "0.0.0.0", "8004"
-kws_address, kws_port = "0.0.0.0", "8005"
-dia_address, dia_port = "0.0.0.0", "8006"
-trans_address, trans_port = "0.0.0.0", "8007"
-agent_address, agent_port = "0.0.0.0", "8008"
+
 logger = logging.getLogger(__file__)
 
 # New session everytime websocket is re-connected
 # TODO: Persistant counters from DB
 session_id_counter = 0
 # speaker_id_counter = 0
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize database connection on startup."""
+    global db_manager, config
+
+    # Set up logging
+    logging.basicConfig(
+        format="%(levelname)s: %(asctime)s %(name)s:%(lineno)s %(message)s",
+        level=getattr(logging, config.log_level, logging.INFO),
+    )
+
+    logger.info(
+        f"Starting VoiceAPI in {'Docker' if config.is_docker else 'local'} mode"
+    )
+    logger.info(f"Database configuration: {config.database}")
+
+    try:
+        db_manager = DatabaseManager(config.database.get_url())
+        await db_manager.initialize()
+        logger.info("✅ Database initialized successfully")
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize database: {e}")
+        raise
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Close database connections on shutdown."""
+    global db_manager
+    if db_manager:
+        await db_manager.close()
+        logger.info("Database connections closed")
 
 
 @app.websocket("/asr")
@@ -46,12 +82,12 @@ async def websocket_asr(
     await websocket.accept()
 
     # Set up ZeroMQ sockets
-    audio_push_port = f"tcp://{audio_address}:{audio_port}"
-    asr_pull_port = f"tcp://{asr_address}:{asr_port}"
-    sid_pull_port = f"tcp://{sid_address}:{sid_port}"
-    kws_pull_port = f"tcp://{kws_address}:{kws_port}"
-    trans_push_port = f"tcp://{trans_address}:{trans_port}"
-    agent_pull_port = f"tcp://{agent_address}:{agent_port}"
+    audio_push_port = f"tcp://{config.audio_address}:{config.audio_port}"
+    asr_pull_port = f"tcp://{config.asr_address}:{config.asr_port}"
+    sid_pull_port = f"tcp://{config.sid_address}:{config.sid_port}"
+    kws_pull_port = f"tcp://{config.kws_address}:{config.kws_port}"
+    trans_push_port = f"tcp://{config.trans_address}:{config.trans_port}"
+    agent_pull_port = f"tcp://{config.agent_address}:{config.agent_port}"
     audio_push_socket = context.socket(zmq.PUSH)
     audio_push_socket.bind(audio_push_port)
     asr_pull_socket = context.socket(zmq.PULL)
@@ -151,25 +187,18 @@ async def websocket_asr(
     # Send result
     async def task_send_result():
         # Prepare DB for new session
-        # TODO: async?
-        global session_id_counter, speaker_id_counter
-        db = SessionLocal()
+        global session_id_counter, db_manager
+        current_session_id = None
+
         # Initialize session if it's the first result
         if session_id_counter == 0:
-            # Wipe all data
-            db.query(Transcript).delete()
-            db.query(Speaker).delete()
-            db.query(Session).delete()
-            db.commit()
-        session = Session(
-            session_id=session_id_counter,
-            session_name=f"meeting_{session_id_counter}",
-            session_date=datetime.date.today(),
-        )
-        db.add(session)
-        db.commit()
-        db.refresh(session)
-        session_id_counter += 1
+            # Optionally wipe all data for development (remove in production)
+            # await db_manager.reset_database()
+            pass
+
+        # Create session and speaker mapping
+        speaker_name_to_db_id = {}  # Maps speaker names to database speaker IDs
+        session_speaker_ids = {}  # Maps speaker names to session-speaker IDs
 
         while True:
             # Reply result to frontend via websocket
@@ -177,42 +206,71 @@ async def websocket_asr(
             await websocket.send_json(result)
 
             # Send result to agent module
-            if result["type"] == "instruction":
+            if result.get("segment_type") == "instruction":
                 await trans_push_socket.send_pyobj(result)
-
-            # Send result to diarization module for second pass
 
             # Write to DB
             try:
-                speaker_id = result["speaker_id"]
+                # Create session on first transcript
+                if current_session_id is None:
+                    current_session_id = await db_manager.create_session(
+                        session_name=f"meeting_{session_id_counter}",
+                        session_date=datetime.date.today(),
+                    )
+                    session_id_counter += 1
+                    logger.info(f"Created new session with ID: {current_session_id}")
+
                 speaker_name = result["speaker_name"]
                 segment_content = result["segment_content"]
                 segment_type = result["segment_type"]
 
-                speaker = Speaker(speaker_id=speaker_id, speaker_name=speaker_name)
-                db.add(speaker)
-                db.commit()
-                db.refresh(speaker)
+                # Create or get speaker
+                if speaker_name not in speaker_name_to_db_id:
+                    # Check if speaker already exists
+                    existing_speakers = await db_manager.get_all_speakers()
+                    existing_speaker = next(
+                        (
+                            s
+                            for s in existing_speakers
+                            if s["speaker_name"] == speaker_name
+                        ),
+                        None,
+                    )
+
+                    if existing_speaker:
+                        speaker_db_id = existing_speaker["speaker_id"]
+                    else:
+                        speaker_db_id = await db_manager.create_speaker(speaker_name)
+
+                    speaker_name_to_db_id[speaker_name] = speaker_db_id
+
+                    # Add speaker to session
+                    session_speaker_id = await db_manager.add_speaker_to_session(
+                        session_id=current_session_id, speaker_id=speaker_db_id
+                    )
+                    session_speaker_ids[speaker_name] = session_speaker_id
+                    logger.info(f"Added speaker '{speaker_name}' to session")
 
                 # Create transcript segment
                 start_time = datetime.datetime.now()
-                # Simulate duration
-                duration = datetime.timedelta(seconds=5)
-                transcript = Transcript(
-                    segment_id=segment_id,
-                    session_id=session_id_counter,
-                    speaker_id=speaker.speaker_id,
-                    segment_type=TranscriptType[transcript_type],
+                duration = datetime.timedelta(seconds=5)  # Simulate duration
+
+                transcript_id = await db_manager.add_transcript(
+                    session_id=current_session_id,
+                    session_speaker_id=session_speaker_ids[speaker_name],
+                    segment_type=segment_type,
                     segment_content=segment_content,
                     start_time=start_time,
                     duration=duration,
+                    segment_index=float(segment_id),
                 )
-                db.add(transcript)
-                db.commit()
+                logger.info(
+                    f"Added transcript segment {transcript_id} for speaker '{speaker_name}': {segment_content[:50]}..."
+                )
+
             except Exception as e:
-                print(f"Error storing transcript: {e}")
-                db.rollback()
-                db.close()
+                logger.error(f"Error storing transcript: {e}")
+                # In async context, we don't need manual rollback - transactions are handled automatically
 
     try:
         await asyncio.gather(
@@ -234,37 +292,112 @@ async def websocket_asr(
         agent_pull_socket.close()
 
 
-from db import init_db
+# REST API endpoints for database interaction
+@app.get("/sessions", response_model=List[Dict[str, Any]])
+async def get_sessions():
+    """Get all sessions."""
+    global db_manager
+    if not db_manager:
+        raise HTTPException(status_code=500, detail="Database not initialized")
+    return await db_manager.get_all_sessions()
+
+
+@app.get("/sessions/{session_id}", response_model=Dict[str, Any])
+async def get_session(session_id: int):
+    """Get a specific session."""
+    global db_manager
+    if not db_manager:
+        raise HTTPException(status_code=500, detail="Database not initialized")
+    session = await db_manager.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return session
+
+
+@app.get("/sessions/{session_id}/transcripts", response_model=List[Dict[str, Any]])
+async def get_session_transcripts(session_id: int):
+    """Get all transcripts for a session."""
+    global db_manager
+    if not db_manager:
+        raise HTTPException(status_code=500, detail="Database not initialized")
+    transcripts = await db_manager.get_session_transcripts(session_id)
+    return transcripts
+
+
+@app.get("/sessions/{session_id}/speakers", response_model=List[Dict[str, Any]])
+async def get_session_speakers(session_id: int):
+    """Get all speakers for a session."""
+    global db_manager
+    if not db_manager:
+        raise HTTPException(status_code=500, detail="Database not initialized")
+    speakers = await db_manager.get_session_speakers(session_id)
+    return speakers
+
+
+@app.get("/speakers", response_model=List[Dict[str, Any]])
+async def get_speakers():
+    """Get all speakers."""
+    global db_manager
+    if not db_manager:
+        raise HTTPException(status_code=500, detail="Database not initialized")
+    return await db_manager.get_all_speakers()
+
+
+@app.get("/transcripts/{transcript_id}", response_model=Dict[str, Any])
+async def get_transcript(transcript_id: int):
+    """Get a specific transcript."""
+    global db_manager
+    if not db_manager:
+        raise HTTPException(status_code=500, detail="Database not initialized")
+    transcript = await db_manager.get_transcript(transcript_id)
+    if not transcript:
+        raise HTTPException(status_code=404, detail="Transcript not found")
+    return transcript
+
+
+@app.delete("/sessions/{session_id}")
+async def delete_session(session_id: int):
+    """Delete a session and all its transcripts."""
+    global db_manager
+    if not db_manager:
+        raise HTTPException(status_code=500, detail="Database not initialized")
+    # The database will handle cascading deletes
+    # This is a simple implementation - you might want to add proper session deletion
+    return {"message": "Session deletion endpoint - implement as needed"}
+
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint."""
+    global db_manager
+    db_status = "healthy" if db_manager else "not initialized"
+    return {
+        "status": "healthy",
+        "database": db_status,
+        "timestamp": datetime.datetime.now().isoformat(),
+    }
+
 
 if __name__ == "__main__":
-    init_db()
     parser = argparse.ArgumentParser()
-    parser.add_argument("--port", type=int, default=8000, help="port number")
-    parser.add_argument("--addr", type=str, default="127.0.0.1", help="serve address")
+    parser.add_argument("--port", type=int, default=config.port, help="port number")
+    parser.add_argument("--addr", type=str, default=config.host, help="serve address")
     parser.add_argument("--docker", action="store_true", help="Docker serving, use DNS")
     args = parser.parse_args()
-    # TODO: make arg parsing better designed
+
+    # Update configuration with command-line arguments
+    update_config(port=args.port, host=args.addr, is_docker=args.docker)
+
+    # If docker mode is enabled, update addresses
     if args.docker:
-        (
-            args.addr,
-            audio_address,
-            asr_address,
-            sid_address,
-            kws_address,
-            trans_address,
-            agent_address,
-        ) = (
-            "0.0.0.0",
-            "*",
-            "asr",
-            "sid",
-            "kws",
-            "*",
-            "agent",
+        update_config(
+            audio_address="*",
+            asr_address="asr",
+            sid_address="sid",
+            kws_address="kws",
+            trans_address="*",
+            agent_address="agent",
         )
 
-    logging.basicConfig(
-        format="%(levelname)s: %(asctime)s %(name)s:%(lineno)s %(message)s",
-        level=logging.INFO,
-    )
+    # Logging will be set up in startup_event
     uvicorn.run(app, host=args.addr, port=args.port)

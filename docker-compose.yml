@@ -28,6 +28,11 @@ services:
       dockerfile: backend/docker/Dockerfile.app
     ports:
       - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://voiceapi:password@db:5432/voiceapi
+      - DOCKER_MODE=true
+      - LOG_LEVEL=INFO
+      - POSTGRES_HOST=db
     depends_on:
       - vad
       - asr
@@ -101,7 +106,7 @@ services:
     ports:
       - "5432:5432"
     environment:
-      - POSTGRES_USER=user
+      - POSTGRES_USER=voiceapi
       - POSTGRES_PASSWORD=password
       - POSTGRES_DB=voiceapi
     volumes:

@@ -7,6 +7,8 @@ requires-python = ">=3.10"
 # TODO: After js frontend pyzmq in dependencies for all
 dependencies = [
     "numpy==1.26.4",
+    "psycopg>=3.2.9",
+    "psycopg-pool>=3.2.6",
     "pydub>=0.25.1",
 ]
 
@@ -21,8 +23,9 @@ fastapi = [
     "uvicorn==0.30.6",
     "pyzmq==26.3.0",
     "websockets==15.0.1",
-    "sqlalchemy>=2.0.40",
-    "psycopg2>=2.9.10",
+    "psycopg[binary]>=3.1.0",
+    "psycopg-pool>=3.1.0",
+    "python-dotenv>=1.0.0",
 ]
 
 sherpa = [
