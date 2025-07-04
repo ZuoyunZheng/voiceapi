@@ -77,11 +77,8 @@ def load_vad_engine(
     st = time.time()
     if "vad" not in _vad_engines:
         config = sherpa_onnx.VadModelConfig()
-        d = os.path.join(model_dir, "silero_vad")
-        if not os.path.exists(d):
-            raise ValueError(f"vad: model not found {d}")
 
-        config.silero_vad.model = os.path.join(d, "silero_vad.onnx")
+        config.silero_vad.model = os.path.join(model_dir, "silero_vad.onnx")
         config.silero_vad.min_silence_duration = min_silence_duration
         config.sample_rate = sample_rate
         config.provider = args.provider

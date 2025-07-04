@@ -5,7 +5,7 @@ services:
       context: frontend
       dockerfile: docker/Dockerfile
     ports:
-      - "8501:3000"
+      - "3000:3000"
     # No more audio related configs since audio is handled browser/client side
     # devices:
     #   - /dev/snd:/dev/snd
